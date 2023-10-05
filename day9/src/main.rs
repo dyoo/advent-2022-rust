@@ -77,6 +77,19 @@ struct BoardState {
     knots: Vec<Pos>,
 }
 
+// Simulate the pulling motion of the head to move the tail.
+fn pull_tail(head: &Pos, tail: &Pos) -> Pos {
+    let (mut delta_x, mut delta_y) = (head.x - tail.x, head.y - tail.y);
+    if delta_x.abs() > 1 {
+	delta_x /= delta_x.abs();
+    }
+    if delta_y.abs() > 1 {
+	delta_y /= delta_y.abs();
+    }
+    Pos { x: delta_x + tail.x,
+	  y: delta_y + tail.y }
+}
+
 impl BoardState {
     fn new(n: usize) -> Self {
         Self {
@@ -89,14 +102,11 @@ impl BoardState {
             return;
         }
 
-        let mut original = self.knots[0].clone();
         self.knots[0] = self.knots[0].apply_movement(movement);
 
         for i in 1..self.knots.len() {
             if !self.knots[i].is_adjacent_to(&self.knots[i - 1]) {
-                (self.knots[i], original) = (original, self.knots[i].clone());
-            } else {
-                original = self.knots[i].clone();
+                self.knots[i] = pull_tail(&self.knots[i-1], &self.knots[i]);
             }
         }
     }
@@ -234,7 +244,7 @@ R 5
 fn test_part_2_large_example_beginning_2() -> Result<(), Box<dyn Error>> {
     let input = "
 R 5
-U 8
+U 6
 ";
     assert_eq!(watch_the_tail(&parse_movements(input,)?, 10,), 1);
 
