@@ -52,36 +52,42 @@ impl Computer {
             RunningInstruction::NoOp => {
                 self.in_flight.take();
             }
-            RunningInstruction::AddX {
-                delay: cycles_left,
-                delta,
-	    } => {
-                if *cycles_left == 0 {
+            RunningInstruction::AddX { delay, delta } => {
+                if *delay == 0 {
                     self.x += *delta;
                     self.in_flight.take();
                 } else {
-                    *cycles_left -= 1;
+                    *delay -= 1;
                 }
             }
-	}
+        }
     }
 
     pub fn tick(&mut self) -> bool {
-	self.load_instruction();
+        self.load_instruction();
+
 	if self.in_flight.is_some() {
-	    self.execute_instruction();
-	    true
-	} else {
-	    false
-	}
+            self.execute_instruction();
+            true
+        } else {
+            false
+        }
     }
 }
 
-struct SignalStrengths(usize, Computer);
+struct SignalStrengths {
+    cycles_executed: usize,
+    computer: Computer,
+    exhausted: bool,
+}
 
 impl SignalStrengths {
     fn new(computer: Computer) -> Self {
-        Self(0, computer)
+        Self {
+            cycles_executed: 0,
+            computer,
+            exhausted: false,
+        }
     }
 }
 
@@ -89,30 +95,32 @@ impl Iterator for SignalStrengths {
     type Item = i32;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.0 += 1;
-        let is_active = self.1.tick();
-        if is_active {
-            Some(self.1.x * (self.0 as i32))
-        } else {
-            None
+        if self.exhausted {
+            return None;
         }
+
+        let result = Some((self.cycles_executed as i32 + 1) * self.computer.x);
+
+        self.exhausted = !self.computer.tick();
+        self.cycles_executed += 1;
+
+        result
     }
 }
 
 fn parse_instructions(s: &str) -> Vec<Instruction> {
     s.lines()
-	.filter_map(
-	    |line|
-	    match line.split_whitespace().collect::<Vec<&str>>()[..] {
-		["addx", n] => {
-		    n.parse::<i32>()
-			.map(|v| Some(Instruction::AddX(v)))
-			.unwrap_or(None)
-		},
-		["noop"] => Some(Instruction::NoOp),
-		_ => None,
-		    
-	    }).collect()
+        .filter_map(
+            |line| match line.split_whitespace().collect::<Vec<&str>>()[..] {
+                ["addx", n] => n
+                    .parse::<i32>()
+                    .map(|v| Some(Instruction::AddX(v)))
+                    .unwrap_or(None),
+                ["noop"] => Some(Instruction::NoOp),
+                _ => None,
+            },
+        )
+        .collect()
 }
 
 #[test]
@@ -122,13 +130,14 @@ noop
 addx 3
 addx -5
 ";
-    assert_eq!(parse_instructions(input),
-	       vec![
-		   Instruction::NoOp,
-		   Instruction::AddX(3),
-		   Instruction::AddX(-5),
-	       ]);
-	       
+    assert_eq!(
+        parse_instructions(input),
+        vec![
+            Instruction::NoOp,
+            Instruction::AddX(3),
+            Instruction::AddX(-5),
+        ]
+    );
 }
 
 #[test]
@@ -161,10 +170,7 @@ fn test_signal_strengths() {
     ]);
     let signal_strengths: Vec<i32> = SignalStrengths::new(computer).collect();
 
-    assert_eq!(
-        signal_strengths,
-        vec![1, 2, 12, 16, -5],
-    );
+    assert_eq!(signal_strengths, vec![1, 2, 3, 16, 20, -6],);
 }
 
 #[test]
@@ -327,6 +333,21 @@ noop
     assert_eq!(signal_strengths[219], 3960);
 }
 
-fn main() {
-    println!("Hello, world!");
+fn part_1(s: &str) -> i32 {
+    let computer = Computer::new(parse_instructions(s));
+    let signal_strengths: Vec<i32> = SignalStrengths::new(computer).collect();
+    signal_strengths[19] + 
+	signal_strengths[59] + 
+	signal_strengths[99] + 
+	signal_strengths[139] +
+	signal_strengths[179] + 
+	signal_strengths[219]
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>>{
+    let input = std::fs::read_to_string("adventofcode.com_2022_day_10_input.txt")?;
+    
+    println!("part 1: {}", part_1(&input));
+
+    Ok(())
 }
