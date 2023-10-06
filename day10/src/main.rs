@@ -123,57 +123,91 @@ fn parse_instructions(s: &str) -> Vec<Instruction> {
         .collect()
 }
 
-#[test]
-fn test_parse_small_program() {
-    let input = "
+// Computing signal strength sums.
+fn part_1(s: &str) -> i32 {
+    let computer = Computer::new(parse_instructions(s));
+    let signal_strengths: Vec<i32> = SignalStrengths::new(computer).collect();
+    signal_strengths[19]
+        + signal_strengths[59]
+        + signal_strengths[99]
+        + signal_strengths[139]
+        + signal_strengths[179]
+        + signal_strengths[219]
+}
+
+// Simulating CRT.
+fn part_2(s: &str) -> String {
+    let mut result = String::new();
+    let mut computer = Computer::new(parse_instructions(s));
+    for _row in 0..6 {
+        for col in 0..40 {
+            if computer.x.abs_diff(col) <= 1 {
+                result.push('#');
+            } else {
+                result.push('.');
+            }
+            computer.tick();
+        }
+        result.push('\n');
+    }
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_small_program() {
+        let input = "
 noop
 addx 3
 addx -5
 ";
-    assert_eq!(
-        parse_instructions(input),
-        vec![
+        assert_eq!(
+            parse_instructions(input),
+            vec![
+                Instruction::NoOp,
+                Instruction::AddX(3),
+                Instruction::AddX(-5),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_small_program() {
+        let mut computer = Computer::new(vec![
             Instruction::NoOp,
             Instruction::AddX(3),
             Instruction::AddX(-5),
-        ]
-    );
-}
+        ]);
+        assert!(computer.tick());
+        assert_eq!(computer.x, 1);
+        assert!(computer.tick());
+        assert_eq!(computer.x, 1);
+        assert!(computer.tick());
+        assert_eq!(computer.x, 4);
+        assert!(computer.tick());
+        assert_eq!(computer.x, 4);
+        assert!(computer.tick());
+        assert_eq!(computer.x, -1);
 
-#[test]
-fn test_small_program() {
-    let mut computer = Computer::new(vec![
-        Instruction::NoOp,
-        Instruction::AddX(3),
-        Instruction::AddX(-5),
-    ]);
-    assert!(computer.tick());
-    assert_eq!(computer.x, 1);
-    assert!(computer.tick());
-    assert_eq!(computer.x, 1);
-    assert!(computer.tick());
-    assert_eq!(computer.x, 4);
-    assert!(computer.tick());
-    assert_eq!(computer.x, 4);
-    assert!(computer.tick());
-    assert_eq!(computer.x, -1);
+        assert!(!computer.tick());
+    }
 
-    assert!(!computer.tick());
-}
+    #[test]
+    fn test_signal_strengths() {
+        let computer = Computer::new(vec![
+            Instruction::NoOp,
+            Instruction::AddX(3),
+            Instruction::AddX(-5),
+        ]);
+        let signal_strengths: Vec<i32> = SignalStrengths::new(computer).collect();
 
-#[test]
-fn test_signal_strengths() {
-    let computer = Computer::new(vec![
-        Instruction::NoOp,
-        Instruction::AddX(3),
-        Instruction::AddX(-5),
-    ]);
-    let signal_strengths: Vec<i32> = SignalStrengths::new(computer).collect();
+        assert_eq!(signal_strengths, vec![1, 2, 3, 16, 20, -6],);
+    }
 
-    assert_eq!(signal_strengths, vec![1, 2, 3, 16, 20, -6],);
-}
-
-const LARGE_EXAMPLE: &str = "
+    const LARGE_EXAMPLE: &str = "
 addx 15
 addx -11
 addx 6
@@ -322,54 +356,24 @@ noop
 noop
 ";
 
-#[test]
-fn test_signal_strengths_larger_example() {
-    let input = LARGE_EXAMPLE;
-    let computer = Computer::new(parse_instructions(input));
-    let signal_strengths: Vec<i32> = SignalStrengths::new(computer).collect();
-    assert_eq!(signal_strengths[19], 420);
-    assert_eq!(signal_strengths[59], 1140);
-    assert_eq!(signal_strengths[99], 1800);
-    assert_eq!(signal_strengths[139], 2940);
-    assert_eq!(signal_strengths[179], 2880);
-    assert_eq!(signal_strengths[219], 3960);
-}
-
-// Computing signal strength sums.
-fn part_1(s: &str) -> i32 {
-    let computer = Computer::new(parse_instructions(s));
-    let signal_strengths: Vec<i32> = SignalStrengths::new(computer).collect();
-    signal_strengths[19]
-        + signal_strengths[59]
-        + signal_strengths[99]
-        + signal_strengths[139]
-        + signal_strengths[179]
-        + signal_strengths[219]
-}
-
-// Simulating CRT.
-fn part_2(s: &str) -> String {
-    let mut result = String::new();
-    let mut computer = Computer::new(parse_instructions(s));
-    for _row in 0..6 {
-        for col in 0..40 {
-            if computer.x.abs_diff(col) <= 1 {
-                result.push('#');
-            } else {
-                result.push('.');
-            }
-            computer.tick();
-        }
-        result.push('\n');
+    #[test]
+    fn test_signal_strengths_larger_example() {
+        let input = LARGE_EXAMPLE;
+        let computer = Computer::new(parse_instructions(input));
+        let signal_strengths: Vec<i32> = SignalStrengths::new(computer).collect();
+        assert_eq!(signal_strengths[19], 420);
+        assert_eq!(signal_strengths[59], 1140);
+        assert_eq!(signal_strengths[99], 1800);
+        assert_eq!(signal_strengths[139], 2940);
+        assert_eq!(signal_strengths[179], 2880);
+        assert_eq!(signal_strengths[219], 3960);
     }
-    result
-}
 
-#[test]
-fn test_part_2() {
-    assert_eq!(
-        part_2(LARGE_EXAMPLE),
-        "
+    #[test]
+    fn test_part_2() {
+        assert_eq!(
+            part_2(LARGE_EXAMPLE),
+            "
 ##..##..##..##..##..##..##..##..##..##..
 ###...###...###...###...###...###...###.
 ####....####....####....####....####....
@@ -377,8 +381,9 @@ fn test_part_2() {
 ######......######......######......####
 #######.......#######.......#######.....
 "
-        .trim_start()
-    );
+            .trim_start()
+        );
+    }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
