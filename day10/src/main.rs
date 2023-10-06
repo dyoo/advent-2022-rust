@@ -1,8 +1,10 @@
+#[derive(Debug, PartialEq)]
 pub enum Instruction {
     NoOp,
     AddX(i32),
 }
 
+#[derive(Debug, PartialEq)]
 pub enum RunningInstruction {
     NoOp,
     AddX { delay: usize, delta: i32 },
@@ -27,10 +29,10 @@ impl Computer {
         }
     }
 
-    fn load_instruction(&mut self) -> bool {
+    fn load_instruction(&mut self) {
         if self.in_flight.is_none() {
             if self.program_counter >= self.program.len() {
-                return false;
+                return;
             }
             let next_instruction = &self.program[self.program_counter];
             self.program_counter += 1;
@@ -42,42 +44,36 @@ impl Computer {
                     delta: *delta,
                 },
             });
-
-            true
-        } else {
-            true
         }
     }
 
     fn execute_instruction(&mut self) {
-        match &mut self.in_flight {
-            Some(running) => match running {
-                RunningInstruction::NoOp => {
+        match self.in_flight.as_mut().unwrap() {
+            RunningInstruction::NoOp => {
+                self.in_flight.take();
+            }
+            RunningInstruction::AddX {
+                delay: cycles_left,
+                delta,
+	    } => {
+                if *cycles_left == 0 {
+                    self.x += *delta;
                     self.in_flight.take();
+                } else {
+                    *cycles_left -= 1;
                 }
-                RunningInstruction::AddX {
-                    delay: cycles_left,
-                    delta,
-                } => {
-                    if *cycles_left != 0 {
-                        *cycles_left -= 1;
-                    } else {
-                        self.x += *delta;
-                        self.in_flight.take();
-                    }
-                }
-            },
-            None => {}
-        }
+            }
+	}
     }
 
     pub fn tick(&mut self) -> bool {
-        if !self.load_instruction() {
-            return false;
-        }
-
-        self.execute_instruction();
-        true
+	self.load_instruction();
+	if self.in_flight.is_some() {
+	    self.execute_instruction();
+	    true
+	} else {
+	    false
+	}
     }
 }
 
@@ -90,17 +86,49 @@ impl SignalStrengths {
 }
 
 impl Iterator for SignalStrengths {
-    type Item = (usize, i32);
+    type Item = i32;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.0 += 1;
         let is_active = self.1.tick();
         if is_active {
-            Some((self.0, self.1.x * (self.0 as i32)))
+            Some(self.1.x * (self.0 as i32))
         } else {
             None
         }
     }
+}
+
+fn parse_instructions(s: &str) -> Vec<Instruction> {
+    s.lines()
+	.filter_map(
+	    |line|
+	    match line.split_whitespace().collect::<Vec<&str>>()[..] {
+		["addx", n] => {
+		    n.parse::<i32>()
+			.map(|v| Some(Instruction::AddX(v)))
+			.unwrap_or(None)
+		},
+		["noop"] => Some(Instruction::NoOp),
+		_ => None,
+		    
+	    }).collect()
+}
+
+#[test]
+fn test_parse_small_program() {
+    let input = "
+noop
+addx 3
+addx -5
+";
+    assert_eq!(parse_instructions(input),
+	       vec![
+		   Instruction::NoOp,
+		   Instruction::AddX(3),
+		   Instruction::AddX(-5),
+	       ]);
+	       
 }
 
 #[test]
@@ -131,12 +159,172 @@ fn test_signal_strengths() {
         Instruction::AddX(3),
         Instruction::AddX(-5),
     ]);
-    let signal_strengths: Vec<(usize, i32)> = SignalStrengths::new(computer).collect();
+    let signal_strengths: Vec<i32> = SignalStrengths::new(computer).collect();
 
     assert_eq!(
         signal_strengths,
-        vec![(1, 1), (2, 2), (3, 12), (4, 16), (5, -5)],
+        vec![1, 2, 12, 16, -5],
     );
+}
+
+#[test]
+fn test_signal_strengths_larger_example() {
+    let input = "
+addx 15
+addx -11
+addx 6
+addx -3
+addx 5
+addx -1
+addx -8
+addx 13
+addx 4
+noop
+addx -1
+addx 5
+addx -1
+addx 5
+addx -1
+addx 5
+addx -1
+addx 5
+addx -1
+addx -35
+addx 1
+addx 24
+addx -19
+addx 1
+addx 16
+addx -11
+noop
+noop
+addx 21
+addx -15
+noop
+noop
+addx -3
+addx 9
+addx 1
+addx -3
+addx 8
+addx 1
+addx 5
+noop
+noop
+noop
+noop
+noop
+addx -36
+noop
+addx 1
+addx 7
+noop
+noop
+noop
+addx 2
+addx 6
+noop
+noop
+noop
+noop
+noop
+addx 1
+noop
+noop
+addx 7
+addx 1
+noop
+addx -13
+addx 13
+addx 7
+noop
+addx 1
+addx -33
+noop
+noop
+noop
+addx 2
+noop
+noop
+noop
+addx 8
+noop
+addx -1
+addx 2
+addx 1
+noop
+addx 17
+addx -9
+addx 1
+addx 1
+addx -3
+addx 11
+noop
+noop
+addx 1
+noop
+addx 1
+noop
+noop
+addx -13
+addx -19
+addx 1
+addx 3
+addx 26
+addx -30
+addx 12
+addx -1
+addx 3
+addx 1
+noop
+noop
+noop
+addx -9
+addx 18
+addx 1
+addx 2
+noop
+noop
+addx 9
+noop
+noop
+noop
+addx -1
+addx 2
+addx -37
+addx 1
+addx 3
+noop
+addx 15
+addx -21
+addx 22
+addx -6
+addx 1
+noop
+addx 2
+addx 1
+noop
+addx -10
+noop
+noop
+addx 20
+addx 1
+addx 2
+addx 2
+addx -6
+addx -11
+noop
+noop
+noop
+";
+    let mut computer = Computer::new(parse_instructions(input));
+    let signal_strengths: Vec<i32> = SignalStrengths::new(computer).collect();
+    assert_eq!(signal_strengths[19], 420);
+    assert_eq!(signal_strengths[59], 1140);
+    assert_eq!(signal_strengths[99], 1800);
+    assert_eq!(signal_strengths[139], 2940);
+    assert_eq!(signal_strengths[179], 2880);
+    assert_eq!(signal_strengths[219], 3960);
 }
 
 fn main() {
