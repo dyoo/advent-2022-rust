@@ -66,7 +66,7 @@ impl Computer {
     pub fn tick(&mut self) -> bool {
         self.load_instruction();
 
-	if self.in_flight.is_some() {
+        if self.in_flight.is_some() {
             self.execute_instruction();
             true
         } else {
@@ -173,9 +173,7 @@ fn test_signal_strengths() {
     assert_eq!(signal_strengths, vec![1, 2, 3, 16, 20, -6],);
 }
 
-#[test]
-fn test_signal_strengths_larger_example() {
-    let input = "
+const LARGE_EXAMPLE: &str = "
 addx 15
 addx -11
 addx 6
@@ -323,7 +321,11 @@ noop
 noop
 noop
 ";
-    let mut computer = Computer::new(parse_instructions(input));
+
+#[test]
+fn test_signal_strengths_larger_example() {
+    let input = LARGE_EXAMPLE;
+    let computer = Computer::new(parse_instructions(input));
     let signal_strengths: Vec<i32> = SignalStrengths::new(computer).collect();
     assert_eq!(signal_strengths[19], 420);
     assert_eq!(signal_strengths[59], 1140);
@@ -333,21 +335,58 @@ noop
     assert_eq!(signal_strengths[219], 3960);
 }
 
+// Computing signal strength sums.
 fn part_1(s: &str) -> i32 {
     let computer = Computer::new(parse_instructions(s));
     let signal_strengths: Vec<i32> = SignalStrengths::new(computer).collect();
-    signal_strengths[19] + 
-	signal_strengths[59] + 
-	signal_strengths[99] + 
-	signal_strengths[139] +
-	signal_strengths[179] + 
-	signal_strengths[219]
+    signal_strengths[19]
+        + signal_strengths[59]
+        + signal_strengths[99]
+        + signal_strengths[139]
+        + signal_strengths[179]
+        + signal_strengths[219]
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>>{
+// Simulating CRT.
+fn part_2(s: &str) -> String {
+    let mut result = String::new();
+    let mut computer = Computer::new(parse_instructions(s));
+    for _row in 0..6 {
+        for col in 0..40 {
+            if computer.x.abs_diff(col) <= 1 {
+                result.push('#');
+            } else {
+                result.push('.');
+            }
+            computer.tick();
+        }
+        result.push('\n');
+    }
+    result
+}
+
+#[test]
+fn test_part_2() {
+    assert_eq!(
+        part_2(LARGE_EXAMPLE),
+        "
+##..##..##..##..##..##..##..##..##..##..
+###...###...###...###...###...###...###.
+####....####....####....####....####....
+#####.....#####.....#####.....#####.....
+######......######......######......####
+#######.......#######.......#######.....
+"
+        .trim_start()
+    );
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let input = std::fs::read_to_string("adventofcode.com_2022_day_10_input.txt")?;
-    
+
     println!("part 1: {}", part_1(&input));
+    println!();
+    println!("part 2:\n{}", part_2(&input));
 
     Ok(())
 }
