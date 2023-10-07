@@ -16,6 +16,7 @@ enum Operand {
 
 #[derive(Debug, PartialEq)]
 struct Monkey {
+    // Statics:
     id: usize,
     starting_items: Vec<i32>,
     operation: Operation,
@@ -23,7 +24,9 @@ struct Monkey {
     true_throw_to: usize,
     false_throw_to: usize,
 
+    // Dynamics:
     items: Vec<i32>,
+    count_inspected: usize,
 }
 
 impl FromStr for Monkey {
@@ -52,7 +55,7 @@ impl FromStr for Monkey {
             .collect::<Vec<_>>()[..]
         {
             ["Starting", "items:", ref items @ ..] => items
-                .into_iter()
+                .iter()
                 .filter_map(|s| s.parse::<i32>().ok())
                 .collect::<Vec<_>>(),
             ref vs => {
@@ -63,7 +66,6 @@ impl FromStr for Monkey {
         let operation: Operation = match lines
             .next()
             .ok_or(String::from("operation missing line"))?
-            .trim_start()
             .split_whitespace()
             .collect::<Vec<_>>()[..]
         {
@@ -83,15 +85,14 @@ impl FromStr for Monkey {
                     return Err(format!("unknown operator {}", op));
                 }
             }
-            _ => {
-                return Err(format!("operation"));
+            ref vs => {
+                return Err(format!("operation malformed {:?}", vs));
             }
         };
 
         let divisible_by_test: i32 = match lines
             .next()
             .ok_or(String::from("divisible by missing"))?
-            .trim_start()
             .split_whitespace()
             .collect::<Vec<_>>()[..]
         {
@@ -106,7 +107,6 @@ impl FromStr for Monkey {
         let true_throw_to: usize = match lines
             .next()
             .ok_or(String::from("if true missing"))?
-            .trim_start()
             .split_whitespace()
             .collect::<Vec<_>>()[..]
         {
@@ -121,7 +121,6 @@ impl FromStr for Monkey {
         let false_throw_to: usize = match lines
             .next()
             .ok_or(String::from("if false missing"))?
-            .trim_start()
             .split_whitespace()
             .collect::<Vec<_>>()[..]
         {
@@ -142,9 +141,94 @@ impl FromStr for Monkey {
             false_throw_to,
 
             items: starting_items,
+	    count_inspected: 0,
         })
     }
 }
+
+
+fn do_round(zoo: &mut Vec<Monkey>) {
+    for i in 0..zoo.len() {
+        do_monkey_turn(i, zoo);
+    }
+}
+
+fn do_monkey_turn(index: usize, zoo: &mut [Monkey]) {
+    let monkey: &mut Monkey = &mut zoo[index];
+    // Take the monkey's items: we'll be distributing.
+    let items = std::mem::take(&mut monkey.items);
+    
+    // Make the borrow checker happy: copy over exactly the rest of
+    // the fields we're reading from the monkey, so that we can
+    // in-place modify the monkeys in the zoo.
+    let operation = monkey.operation.clone();
+    let divisible_by_test = monkey.divisible_by_test;
+    let true_throw_to = monkey.true_throw_to;
+    let false_throw_to = monkey.false_throw_to;
+
+    monkey.count_inspected += items.len();
+    for mut item in items {
+        // Inspects an item, changing worry.
+        item = apply_operation(item, &operation);
+
+        // Compute relief.
+        item /= 3;
+
+        // Compute target to throw
+        let target: usize = if item % divisible_by_test == 0 {
+            true_throw_to
+        } else {
+            false_throw_to
+        };
+
+        // In-place throw to the next monkey.  This is what
+        // invalidates any earlier borrows of zoo.
+        zoo[target].items.push(item);
+    }
+}
+
+fn apply_operation(item: i32, operation: &Operation) -> i32 {
+    match operation {
+        Operation::Add(operand) => item + apply_operand(item, operand),
+        Operation::Multiply(operand) => item * apply_operand(item, operand),
+    }
+}
+
+fn apply_operand(old: i32, operand: &Operand) -> i32 {
+    match operand {
+        Operand::Const(v) => *v,
+        Operand::Old => old,
+    }
+}
+
+fn parse_zoo(s: &str) -> Result<Vec<Monkey>, String> {
+    s.split("\n\n").map(Monkey::from_str).collect()
+}
+
+fn part_1(input: &str) -> Result<(), Box<dyn Error>> {
+    let mut zoo = parse_zoo(input)?;
+    for _ in 0..20 {
+	do_round(&mut zoo);
+    }
+
+    let mut inspections: Vec<usize> = zoo.into_iter().map(|monkey| monkey.count_inspected).collect();
+    inspections.sort();
+
+    let monkey_business = inspections[inspections.len() - 2] * inspections[inspections.len() -1];
+    println!("part 1: {}", monkey_business);
+    
+    Ok(())
+
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+
+    let input = read_to_string("adventofcode.com_2022_day_11_input.txt")?;
+    part_1(&input)?;
+
+    Ok(())
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -243,72 +327,4 @@ Monkey 3:
 
 	Ok(())
     }
-}
-
-fn do_round(zoo: &mut Vec<Monkey>) {
-    for i in 0..zoo.len() {
-        do_monkey_turn(i, zoo);
-    }
-}
-
-fn do_monkey_turn(index: usize, zoo: &mut Vec<Monkey>) {
-    let monkey: &mut Monkey = &mut zoo[index];
-    // Take the monkey's items: we'll be distributing.
-    let items = std::mem::replace(&mut monkey.items, vec![]);
-
-    // Make the borrow checker happy: copy over exactly the rest of
-    // the fields we're reading from the monkey, so that we can
-    // in-place modify the monkeys in the zoo.
-    let operation = monkey.operation.clone();
-    let divisible_by_test = monkey.divisible_by_test;
-    let true_throw_to = monkey.true_throw_to;
-    let false_throw_to = monkey.false_throw_to;
-
-    for mut item in items {
-        // Inspects an item, changing worry.
-        item = apply_operation(item, &operation);
-
-        // Compute relief.
-        item /= 3;
-
-        // Compute target to throw
-        let target: usize = if item % divisible_by_test == 0 {
-            true_throw_to
-        } else {
-            false_throw_to
-        };
-
-        // In-place throw to the next monkey.  This is what
-        // invalidates any earlier borrows of zoo.
-        zoo[target].items.push(item);
-    }
-}
-
-fn apply_operation(item: i32, operation: &Operation) -> i32 {
-    match operation {
-        Operation::Add(operand) => item + apply_operand(item, operand),
-        Operation::Multiply(operand) => item * apply_operand(item, operand),
-    }
-}
-
-fn apply_operand(old: i32, operand: &Operand) -> i32 {
-    match operand {
-        Operand::Const(v) => *v,
-        Operand::Old => old,
-    }
-}
-
-fn parse_zoo(s: &str) -> Result<Vec<Monkey>, String> {
-    s.split("\n\n").map(|s| Monkey::from_str(s)).collect()
-}
-
-fn main() -> Result<(), Box<dyn Error>> {
-    let input = read_to_string("adventofcode.com_2022_day_11_input.txt")?;
-    let zoo = parse_zoo(&input)?;
-    for monkey in zoo.iter() {
-        println!("{:?}", monkey);
-        println!();
-    }
-
-    Ok(())
 }
