@@ -1,9 +1,16 @@
+use std::fs::read_to_string;
 use std::str::FromStr;
 
 #[derive(Debug, PartialEq)]
 enum Operation {
-    Multiply(i32),
-    Add(i32),
+    Multiply(Operand),
+    Add(Operand),
+}
+
+#[derive(Debug, PartialEq)]
+enum Operand {
+    Const(i32),
+    Old,
 }
 
 #[derive(Debug, PartialEq)]
@@ -14,6 +21,8 @@ struct Monkey {
     divisible_by_test: i32,
     true_throw_to: i32,
     false_throw_to: i32,
+
+    items: Vec<i32>,
 }
 
 impl FromStr for Monkey {
@@ -58,20 +67,25 @@ impl FromStr for Monkey {
             .collect::<Vec<_>>()[..]
         {
             ["Operation:", "new", "=", "old", op, v] => {
-		let v = v.parse::<i32>().map_err(|_| format!("parsing number"))?;
-		if op == "*" {
-		    Operation::Multiply(v)
-		} else if op == "+" {
-		    Operation::Add(v)
-		} else {
+                let v = if v == "old" {
+                    Operand::Old
+                } else {
+                    v.parse::<i32>()
+                        .map(Operand::Const)
+                        .map_err(|_| format!("parsing number {:?}", v))?
+                };
+                if op == "*" {
+                    Operation::Multiply(v)
+                } else if op == "+" {
+                    Operation::Add(v)
+                } else {
                     return Err(format!("unknown operator {}", op));
-		}
-	    },
+                }
+            }
             _ => {
                 return Err(format!("operation"));
             }
         };
-	
 
         let divisible_by_test: i32 = match lines
             .next()
@@ -80,9 +94,9 @@ impl FromStr for Monkey {
             .split_whitespace()
             .collect::<Vec<_>>()[..]
         {
-            ["Test:", "divisible", "by", v] => {
-		v.parse::<i32>().map_err(|_| format!("divisible by: {:?}", v))?
-	    },
+            ["Test:", "divisible", "by", v] => v
+                .parse::<i32>()
+                .map_err(|_| format!("divisible by: {:?}", v))?,
             ref vs => {
                 return Err(format!("divisible by: {:?}", vs));
             }
@@ -95,9 +109,9 @@ impl FromStr for Monkey {
             .split_whitespace()
             .collect::<Vec<_>>()[..]
         {
-            ["If", "true:", "throw", "to", "monkey", v] => {
-		v.parse::<i32>().map_err(|_| format!("divisible by: {:?}", v))?
-	    },
+            ["If", "true:", "throw", "to", "monkey", v] => v
+                .parse::<i32>()
+                .map_err(|_| format!("divisible by: {:?}", v))?,
             ref vs => {
                 return Err(format!("if true: {:?}", vs));
             }
@@ -110,22 +124,24 @@ impl FromStr for Monkey {
             .split_whitespace()
             .collect::<Vec<_>>()[..]
         {
-            ["If", "false:", "throw", "to", "monkey", v] => {
-		v.parse::<i32>().map_err(|_| format!("divisible by: {:?}", v))?
-	    },
+            ["If", "false:", "throw", "to", "monkey", v] => v
+                .parse::<i32>()
+                .map_err(|_| format!("divisible by: {:?}", v))?,
             ref vs => {
                 return Err(format!("if false: {:?}", vs));
             }
         };
 
-	Ok(Monkey {
-	    id,
-	    starting_items,
-	    operation,
-	    divisible_by_test,
-	    true_throw_to,
-	    false_throw_to,
-	})
+        Ok(Monkey {
+            id,
+            starting_items,
+            operation,
+            divisible_by_test,
+            true_throw_to,
+            false_throw_to,
+
+	    items: vec![],
+        })
     }
 }
 
@@ -138,19 +154,24 @@ Monkey 0:
   Test: divisible by 23
     If true: throw to monkey 2
     If false: throw to monkey 3
-".trim_start();
+"
+    .trim_start();
     let monkey: Monkey = input.parse()?;
 
     assert_eq!(monkey.id, 0);
     assert_eq!(monkey.starting_items, vec![79, 98]);
-    assert_eq!(monkey.operation, Operation::Multiply(19));
+    assert_eq!(monkey.operation, Operation::Multiply(Operand::Const(19)));
     assert_eq!(monkey.divisible_by_test, 23);
     assert_eq!(monkey.true_throw_to, 2);
     assert_eq!(monkey.false_throw_to, 3);
-    
+
     Ok(())
 }
 
-fn main() {
-    println!("Hello, world!");
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    for chunk in read_to_string("adventofcode.com_2022_day_11_input.txt")?.split("\n\n") {
+        println!("{:?}", chunk.parse::<Monkey>()?);
+    }
+
+    Ok(())
 }
