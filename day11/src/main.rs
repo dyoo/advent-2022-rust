@@ -1,5 +1,6 @@
 use std::fs::read_to_string;
 use std::str::FromStr;
+use std::error::Error;
 
 #[derive(Debug, PartialEq)]
 enum Operation {
@@ -134,20 +135,24 @@ impl FromStr for Monkey {
 
         Ok(Monkey {
             id,
-            starting_items,
+            starting_items: starting_items.clone(),
             operation,
             divisible_by_test,
             true_throw_to,
             false_throw_to,
 
-	    items: vec![],
+	    items: starting_items,
         })
     }
 }
 
-#[test]
-fn test_from_str() -> Result<(), String> {
-    let input = "
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn test_from_str() -> Result<(), String> {
+	let input = "
 Monkey 0:
   Starting items: 79, 98
   Operation: new = old * 19
@@ -155,22 +160,78 @@ Monkey 0:
     If true: throw to monkey 2
     If false: throw to monkey 3
 "
-    .trim_start();
-    let monkey: Monkey = input.parse()?;
+	    .trim_start();
+	let monkey: Monkey = input.parse()?;
 
-    assert_eq!(monkey.id, 0);
-    assert_eq!(monkey.starting_items, vec![79, 98]);
-    assert_eq!(monkey.operation, Operation::Multiply(Operand::Const(19)));
-    assert_eq!(monkey.divisible_by_test, 23);
-    assert_eq!(monkey.true_throw_to, 2);
-    assert_eq!(monkey.false_throw_to, 3);
+	assert_eq!(monkey.id, 0);
+	assert_eq!(monkey.starting_items, vec![79, 98]);
+	assert_eq!(monkey.operation, Operation::Multiply(Operand::Const(19)));
+	assert_eq!(monkey.divisible_by_test, 23);
+	assert_eq!(monkey.true_throw_to, 2);
+	assert_eq!(monkey.false_throw_to, 3);
 
-    Ok(())
+	Ok(())
+    }
+
+    const EXAMPLE: &str = "\
+Monkey 0:
+  Starting items: 79, 98
+  Operation: new = old * 19
+  Test: divisible by 23
+    If true: throw to monkey 2
+    If false: throw to monkey 3
+
+Monkey 1:
+  Starting items: 54, 65, 75, 74
+  Operation: new = old + 6
+  Test: divisible by 19
+    If true: throw to monkey 2
+    If false: throw to monkey 0
+
+Monkey 2:
+  Starting items: 79, 60, 97
+  Operation: new = old * old
+  Test: divisible by 13
+    If true: throw to monkey 1
+    If false: throw to monkey 3
+
+Monkey 3:
+  Starting items: 74
+  Operation: new = old + 3
+  Test: divisible by 17
+    If true: throw to monkey 0
+    If false: throw to monkey 1
+";
+
+    #[test]
+    fn test_parse_monkeys() -> Result<(), Box<dyn Error>> {
+	let monkeys = parse_monkeys(EXAMPLE)?;
+	assert_eq!(monkeys.len(), 4);
+
+	assert_eq!(monkeys.into_iter().map(|m|m.items).collect::<Vec<Vec<i32>>>(),
+		   vec![vec![79, 98],
+			vec![54, 65, 75, 74],
+			vec![79, 60, 97],
+			vec![74],
+		   ]);
+	Ok(())
+    }
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    for chunk in read_to_string("adventofcode.com_2022_day_11_input.txt")?.split("\n\n") {
-        println!("{:?}", chunk.parse::<Monkey>()?);
+
+fn parse_monkeys(s: &str) -> Result<Vec<Monkey>, String> {
+    s.split("\n\n")
+	.map(|s| Monkey::from_str(s))
+	.collect()
+}
+
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let input = read_to_string("adventofcode.com_2022_day_11_input.txt")?;
+    let monkeys = parse_monkeys(&input)?;
+    for monkey in monkeys.iter() {
+        println!("{:?}", monkey);
+	println!();
     }
 
     Ok(())
