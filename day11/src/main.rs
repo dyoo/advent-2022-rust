@@ -10,7 +10,7 @@ enum Operation {
 
 #[derive(Debug, PartialEq, Clone)]
 enum Operand {
-    Const(i32),
+    Const(u64),
     Old,
 }
 
@@ -18,14 +18,14 @@ enum Operand {
 struct Monkey {
     // Statics:
     id: usize,
-    starting_items: Vec<i32>,
+    starting_items: Vec<u64>,
     operation: Operation,
-    divisible_by_test: i32,
+    divisible_by_test: u64,
     true_throw_to: usize,
     false_throw_to: usize,
 
     // Dynamics:
-    items: Vec<i32>,
+    items: Vec<u64>,
     count_inspected: usize,
 }
 
@@ -47,7 +47,7 @@ impl FromStr for Monkey {
             }
         };
 
-        let starting_items: Vec<i32> = match lines
+        let starting_items: Vec<u64> = match lines
             .next()
             .ok_or(String::from("Missing starting item line"))?
             .trim_start()
@@ -56,7 +56,7 @@ impl FromStr for Monkey {
         {
             ["Starting", "items:", ref items @ ..] => items
                 .iter()
-                .filter_map(|s| s.parse::<i32>().ok())
+                .filter_map(|s| s.parse().ok())
                 .collect::<Vec<_>>(),
             ref vs => {
                 return Err(format!("starting item: {:?}", vs));
@@ -73,7 +73,7 @@ impl FromStr for Monkey {
                 let v = if v == "old" {
                     Operand::Old
                 } else {
-                    v.parse::<i32>()
+                    v.parse()
                         .map(Operand::Const)
                         .map_err(|_| format!("parsing number {:?}", v))?
                 };
@@ -90,15 +90,15 @@ impl FromStr for Monkey {
             }
         };
 
-        let divisible_by_test: i32 = match lines
+        let divisible_by_test: u64 = match lines
             .next()
             .ok_or(String::from("divisible by missing"))?
             .split_whitespace()
             .collect::<Vec<_>>()[..]
         {
-            ["Test:", "divisible", "by", v] => v
-                .parse::<i32>()
-                .map_err(|_| format!("divisible by: {:?}", v))?,
+            ["Test:", "divisible", "by", v] => {
+                v.parse().map_err(|_| format!("divisible by: {:?}", v))?
+            }
             ref vs => {
                 return Err(format!("divisible by: {:?}", vs));
             }
@@ -141,23 +141,22 @@ impl FromStr for Monkey {
             false_throw_to,
 
             items: starting_items,
-	    count_inspected: 0,
+            count_inspected: 0,
         })
     }
 }
 
-
-fn do_round(zoo: &mut Vec<Monkey>) {
+fn do_round(zoo: &mut Vec<Monkey>, relief_fn: &dyn Fn(u64) -> u64) {
     for i in 0..zoo.len() {
-        do_monkey_turn(i, zoo);
+        do_monkey_turn(i, zoo, relief_fn);
     }
 }
 
-fn do_monkey_turn(index: usize, zoo: &mut [Monkey]) {
+fn do_monkey_turn(index: usize, zoo: &mut [Monkey], relief_fn: &dyn Fn(u64) -> u64) {
     let monkey: &mut Monkey = &mut zoo[index];
     // Take the monkey's items: we'll be distributing.
     let items = std::mem::take(&mut monkey.items);
-    
+
     // Make the borrow checker happy: copy over exactly the rest of
     // the fields we're reading from the monkey, so that we can
     // in-place modify the monkeys in the zoo.
@@ -172,7 +171,7 @@ fn do_monkey_turn(index: usize, zoo: &mut [Monkey]) {
         item = apply_operation(item, &operation);
 
         // Compute relief.
-        item /= 3;
+        item = relief_fn(item);
 
         // Compute target to throw
         let target: usize = if item % divisible_by_test == 0 {
@@ -187,14 +186,14 @@ fn do_monkey_turn(index: usize, zoo: &mut [Monkey]) {
     }
 }
 
-fn apply_operation(item: i32, operation: &Operation) -> i32 {
+fn apply_operation(item: u64, operation: &Operation) -> u64 {
     match operation {
         Operation::Add(operand) => item + apply_operand(item, operand),
         Operation::Multiply(operand) => item * apply_operand(item, operand),
     }
 }
 
-fn apply_operand(old: i32, operand: &Operand) -> i32 {
+fn apply_operand(old: u64, operand: &Operand) -> u64 {
     match operand {
         Operand::Const(v) => *v,
         Operand::Old => old,
@@ -208,27 +207,57 @@ fn parse_zoo(s: &str) -> Result<Vec<Monkey>, String> {
 fn part_1(input: &str) -> Result<(), Box<dyn Error>> {
     let mut zoo = parse_zoo(input)?;
     for _ in 0..20 {
-	do_round(&mut zoo);
+        do_round(&mut zoo, &|x| x / 3);
     }
 
-    let mut inspections: Vec<usize> = zoo.into_iter().map(|monkey| monkey.count_inspected).collect();
+    let mut inspections: Vec<usize> = zoo
+        .into_iter()
+        .map(|monkey| monkey.count_inspected)
+        .collect();
     inspections.sort();
 
-    let monkey_business = inspections[inspections.len() - 2] * inspections[inspections.len() -1];
-    println!("part 1: {}", monkey_business);
-    
-    Ok(())
+    let monkey_business = inspections[inspections.len() - 2] * inspections[inspections.len() - 1];
+    println!("part 1: {} (should be 316888)", monkey_business);
 
+    Ok(())
+}
+
+fn part_2(input: &str) -> Result<(), Box<dyn Error>> {
+    let mut zoo = parse_zoo(input)?;
+
+    // Keep the numbers down by doing modulo the divisibles product.
+    // https://jactl.io/blog/2023/04/17/advent-of-code-2022-day11.html
+    let divisibles: u64 = zoo
+        .iter()
+        .map(|monkey| monkey.divisible_by_test)
+        .collect::<std::collections::HashSet<_>>()
+        .iter()
+        .product();
+
+    for _ in 0..10000 {
+        do_round(&mut zoo, &|x| x % divisibles);
+    }
+
+    let mut inspections: Vec<usize> = zoo
+        .into_iter()
+        .map(|monkey| monkey.count_inspected)
+        .collect();
+    inspections.sort();
+
+    let monkey_business = inspections[inspections.len() - 2] * inspections[inspections.len() - 1];
+    println!("part 2: {}", monkey_business);
+
+    Ok(())
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-
     let input = read_to_string("adventofcode.com_2022_day_11_input.txt")?;
     part_1(&input)?;
+    println!();
+    part_2(&input)?;
 
     Ok(())
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -293,10 +322,7 @@ Monkey 3:
         assert_eq!(zoo.len(), 4);
 
         assert_eq!(
-            zoo
-                .into_iter()
-                .map(|m| m.items)
-                .collect::<Vec<Vec<i32>>>(),
+            zoo.into_iter().map(|m| m.items).collect::<Vec<Vec<_>>>(),
             vec![
                 vec![79, 98],
                 vec![54, 65, 75, 74],
@@ -310,13 +336,10 @@ Monkey 3:
     #[test]
     fn test_do_round() -> Result<(), Box<dyn Error>> {
         let mut zoo = parse_zoo(EXAMPLE)?;
-	do_round(&mut zoo);
+        do_round(&mut zoo, &|x| x / 3);
 
         assert_eq!(
-            zoo
-                .into_iter()
-                .map(|m| m.items)
-                .collect::<Vec<Vec<i32>>>(),
+            zoo.into_iter().map(|m| m.items).collect::<Vec<Vec<_>>>(),
             vec![
                 vec![20, 23, 27, 26],
                 vec![2080, 25, 167, 207, 401, 1046],
@@ -325,6 +348,6 @@ Monkey 3:
             ]
         );
 
-	Ok(())
+        Ok(())
     }
 }
