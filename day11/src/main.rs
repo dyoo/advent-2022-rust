@@ -225,17 +225,15 @@ fn part_1(input: &str) -> Result<(), Box<dyn Error>> {
 fn part_2(input: &str) -> Result<(), Box<dyn Error>> {
     let mut zoo = parse_zoo(input)?;
 
-    // Keep the numbers down by doing modulo the divisibles product.
+    // Keep the numbers down by doing modulo the LCM of all divisibles.
     // https://jactl.io/blog/2023/04/17/advent-of-code-2022-day11.html
-    let divisibles: u64 = zoo
+    let common_multiple: u64 = zoo
         .iter()
         .map(|monkey| monkey.divisible_by_test)
-        .collect::<std::collections::HashSet<_>>()
-        .iter()
-        .product();
+        .fold(1, least_common_multiple);
 
     for _ in 0..10000 {
-        do_round(&mut zoo, &|x| x % divisibles);
+        do_round(&mut zoo, &|x| x % common_multiple);
     }
 
     let mut inspections: Vec<usize> = zoo
@@ -245,9 +243,20 @@ fn part_2(input: &str) -> Result<(), Box<dyn Error>> {
     inspections.sort();
 
     let monkey_business = inspections[inspections.len() - 2] * inspections[inspections.len() - 1];
-    println!("part 2: {}", monkey_business);
+    println!("part 2: {} (should be 35270398814)", monkey_business);
 
     Ok(())
+}
+
+fn greatest_common_divisor(mut a: u64, mut b:u64) -> u64 {
+    while b != 0 {
+	(a, b) = (b, a % b);
+    }
+    a
+}
+
+fn least_common_multiple(a: u64, b:u64) -> u64 {
+    a * b / greatest_common_divisor(a, b)
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
