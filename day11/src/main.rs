@@ -16,17 +16,27 @@ enum Operand {
 
 #[derive(Debug, PartialEq)]
 struct Monkey {
-    // Statics:
     id: usize,
     starting_items: Vec<u64>,
     operation: Operation,
     divisible_by_test: u64,
     true_throw_to: usize,
     false_throw_to: usize,
+}
 
-    // Dynamics:
+#[derive(Debug, PartialEq)]
+struct MonkeyDynamics {
     items: Vec<u64>,
     count_inspected: usize,
+}
+
+impl Monkey {
+    fn get_dynamics(&self) -> MonkeyDynamics {
+        MonkeyDynamics {
+            items: self.starting_items.clone(),
+            count_inspected: 0,
+        }
+    }
 }
 
 impl FromStr for Monkey {
@@ -139,50 +149,45 @@ impl FromStr for Monkey {
             divisible_by_test,
             true_throw_to,
             false_throw_to,
-
-            items: starting_items,
-            count_inspected: 0,
         })
     }
 }
 
-fn do_round(zoo: &mut Vec<Monkey>, relief_fn: &dyn Fn(u64) -> u64) {
+fn do_round(zoo: &[Monkey], dynamics: &mut [MonkeyDynamics], relief_fn: &dyn Fn(u64) -> u64) {
     for i in 0..zoo.len() {
-        do_monkey_turn(i, zoo, relief_fn);
+        do_monkey_turn(i, zoo, dynamics, relief_fn);
     }
 }
 
-fn do_monkey_turn(index: usize, zoo: &mut [Monkey], relief_fn: &dyn Fn(u64) -> u64) {
-    let monkey: &mut Monkey = &mut zoo[index];
-    // Take the monkey's items: we'll be distributing.
-    let items = std::mem::take(&mut monkey.items);
+fn do_monkey_turn(
+    index: usize,
+    zoo: &[Monkey],
+    dynamics: &mut [MonkeyDynamics],
+    relief_fn: &dyn Fn(u64) -> u64,
+) {
+    let monkey: &Monkey = &zoo[index];
 
-    // Make the borrow checker happy: copy over exactly the rest of
-    // the fields we're reading from the monkey, so that we can
-    // in-place modify the monkeys in the zoo.
-    let operation = monkey.operation.clone();
-    let divisible_by_test = monkey.divisible_by_test;
-    let true_throw_to = monkey.true_throw_to;
-    let false_throw_to = monkey.false_throw_to;
+    // Take the monkey's items off their hands: we'll be distributing
+    // to other monkeys.
+    let items = std::mem::take(&mut dynamics[index].items);
 
-    monkey.count_inspected += items.len();
-    for mut item in items {
+    dynamics[index].count_inspected += items.len();
+    for item in items {
         // Inspects an item, changing worry.
-        item = apply_operation(item, &operation);
+        let item = apply_operation(item, &monkey.operation);
 
         // Compute relief.
-        item = relief_fn(item);
+        let item = relief_fn(item);
 
         // Compute target to throw
-        let target: usize = if item % divisible_by_test == 0 {
-            true_throw_to
+        let target: usize = if item % monkey.divisible_by_test == 0 {
+            monkey.true_throw_to
         } else {
-            false_throw_to
+            monkey.false_throw_to
         };
 
-        // In-place throw to the next monkey.  This is what
-        // invalidates any earlier borrows of zoo.
-        zoo[target].items.push(item);
+        // In-place throw to the next monkey.
+        dynamics[target].items.push(item);
     }
 }
 
@@ -205,12 +210,13 @@ fn parse_zoo(s: &str) -> Result<Vec<Monkey>, String> {
 }
 
 fn part_1(input: &str) -> Result<(), Box<dyn Error>> {
-    let mut zoo = parse_zoo(input)?;
+    let zoo = parse_zoo(input)?;
+    let mut dynamics: Vec<MonkeyDynamics> = zoo.iter().map(Monkey::get_dynamics).collect();
     for _ in 0..20 {
-        do_round(&mut zoo, &|x| x / 3);
+        do_round(&zoo, &mut dynamics, &|x| x / 3);
     }
 
-    let mut inspections: Vec<usize> = zoo
+    let mut inspections: Vec<usize> = dynamics
         .into_iter()
         .map(|monkey| monkey.count_inspected)
         .collect();
@@ -223,7 +229,8 @@ fn part_1(input: &str) -> Result<(), Box<dyn Error>> {
 }
 
 fn part_2(input: &str) -> Result<(), Box<dyn Error>> {
-    let mut zoo = parse_zoo(input)?;
+    let zoo = parse_zoo(input)?;
+    let mut dynamics: Vec<MonkeyDynamics> = zoo.iter().map(Monkey::get_dynamics).collect();
 
     // Keep the numbers down by doing modulo the LCM of all divisibles.
     // https://jactl.io/blog/2023/04/17/advent-of-code-2022-day11.html
@@ -233,10 +240,10 @@ fn part_2(input: &str) -> Result<(), Box<dyn Error>> {
         .fold(1, least_common_multiple);
 
     for _ in 0..10000 {
-        do_round(&mut zoo, &|x| x % common_multiple);
+        do_round(&zoo, &mut dynamics, &|x| x % common_multiple);
     }
 
-    let mut inspections: Vec<usize> = zoo
+    let mut inspections: Vec<usize> = dynamics
         .into_iter()
         .map(|monkey| monkey.count_inspected)
         .collect();
@@ -248,14 +255,14 @@ fn part_2(input: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn greatest_common_divisor(mut a: u64, mut b:u64) -> u64 {
+fn greatest_common_divisor(mut a: u64, mut b: u64) -> u64 {
     while b != 0 {
-	(a, b) = (b, a % b);
+        (a, b) = (b, a % b);
     }
     a
 }
 
-fn least_common_multiple(a: u64, b:u64) -> u64 {
+fn least_common_multiple(a: u64, b: u64) -> u64 {
     a * b / greatest_common_divisor(a, b)
 }
 
@@ -331,7 +338,9 @@ Monkey 3:
         assert_eq!(zoo.len(), 4);
 
         assert_eq!(
-            zoo.into_iter().map(|m| m.items).collect::<Vec<Vec<_>>>(),
+            zoo.into_iter()
+                .map(|m| m.starting_items)
+                .collect::<Vec<Vec<_>>>(),
             vec![
                 vec![79, 98],
                 vec![54, 65, 75, 74],
@@ -344,11 +353,15 @@ Monkey 3:
 
     #[test]
     fn test_do_round() -> Result<(), Box<dyn Error>> {
-        let mut zoo = parse_zoo(EXAMPLE)?;
-        do_round(&mut zoo, &|x| x / 3);
+        let zoo = parse_zoo(EXAMPLE)?;
+        let mut dynamics: Vec<MonkeyDynamics> = zoo.iter().map(Monkey::get_dynamics).collect();
+        do_round(&zoo, &mut dynamics, &|x| x / 3);
 
         assert_eq!(
-            zoo.into_iter().map(|m| m.items).collect::<Vec<Vec<_>>>(),
+            dynamics
+                .into_iter()
+                .map(|m| m.items)
+                .collect::<Vec<Vec<_>>>(),
             vec![
                 vec![20, 23, 27, 26],
                 vec![2080, 25, 167, 207, 401, 1046],
