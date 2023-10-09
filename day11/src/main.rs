@@ -153,25 +153,39 @@ impl FromStr for Monkey {
     }
 }
 
-fn do_round(zoo: &[Monkey], dynamics: &mut [MonkeyDynamics], relief_fn: &dyn Fn(u64) -> u64) {
-    for i in 0..zoo.len() {
-        do_monkey_turn(i, zoo, dynamics, relief_fn);
+#[derive(Debug)]
+struct Zoo {
+    monkeys: Box<[Monkey]>,
+    dynamics: Box<[MonkeyDynamics]>,
+}
+
+impl Zoo {
+    fn new(monkeys: Vec<Monkey>) -> Self {
+        let dynamics = monkeys.iter().map(Monkey::get_dynamics).collect::<Vec<_>>();
+        Self {
+            monkeys: monkeys.into(),
+            dynamics: dynamics.into(),
+        }
+    }
+    fn len(&self) -> usize {
+        self.monkeys.len()
     }
 }
 
-fn do_monkey_turn(
-    index: usize,
-    zoo: &[Monkey],
-    dynamics: &mut [MonkeyDynamics],
-    relief_fn: &dyn Fn(u64) -> u64,
-) {
-    let monkey: &Monkey = &zoo[index];
+fn do_round(zoo: &mut Zoo, relief_fn: &dyn Fn(u64) -> u64) {
+    for i in 0..zoo.len() {
+        do_monkey_turn(i, zoo, relief_fn);
+    }
+}
+
+fn do_monkey_turn(index: usize, zoo: &mut Zoo, relief_fn: &dyn Fn(u64) -> u64) {
+    let monkey: &Monkey = &zoo.monkeys[index];
 
     // Take the monkey's items off their hands: we'll be distributing
     // to other monkeys.
-    let items = std::mem::take(&mut dynamics[index].items);
+    let items = std::mem::take(&mut zoo.dynamics[index].items);
 
-    dynamics[index].count_inspected += items.len();
+    zoo.dynamics[index].count_inspected += items.len();
     for item in items {
         // Inspects an item, changing worry.
         let item = apply_operation(item, &monkey.operation);
@@ -187,7 +201,7 @@ fn do_monkey_turn(
         };
 
         // In-place throw to the next monkey.
-        dynamics[target].items.push(item);
+        zoo.dynamics[target].items.push(item);
     }
 }
 
@@ -205,19 +219,23 @@ fn apply_operand(old: u64, operand: &Operand) -> u64 {
     }
 }
 
-fn parse_zoo(s: &str) -> Result<Vec<Monkey>, String> {
-    s.split("\n\n").map(Monkey::from_str).collect()
+fn parse_zoo(s: &str) -> Result<Zoo, String> {
+    let monkeys: Vec<Monkey> = s
+        .split("\n\n")
+        .map(|s| s.parse())
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(Zoo::new(monkeys))
 }
 
 fn part_1(input: &str) -> Result<(), Box<dyn Error>> {
-    let zoo = parse_zoo(input)?;
-    let mut dynamics: Vec<MonkeyDynamics> = zoo.iter().map(Monkey::get_dynamics).collect();
+    let mut zoo = parse_zoo(input)?;
     for _ in 0..20 {
-        do_round(&zoo, &mut dynamics, &|x| x / 3);
+        do_round(&mut zoo, &|x| x / 3);
     }
 
-    let mut inspections: Vec<usize> = dynamics
-        .into_iter()
+    let mut inspections: Vec<usize> = zoo
+        .dynamics
+        .iter()
         .map(|monkey| monkey.count_inspected)
         .collect();
     inspections.sort();
@@ -229,22 +247,23 @@ fn part_1(input: &str) -> Result<(), Box<dyn Error>> {
 }
 
 fn part_2(input: &str) -> Result<(), Box<dyn Error>> {
-    let zoo = parse_zoo(input)?;
-    let mut dynamics: Vec<MonkeyDynamics> = zoo.iter().map(Monkey::get_dynamics).collect();
+    let mut zoo = parse_zoo(input)?;
 
     // Keep the numbers down by doing modulo the LCM of all divisibles.
     // https://jactl.io/blog/2023/04/17/advent-of-code-2022-day11.html
     let common_multiple: u64 = zoo
+        .monkeys
         .iter()
         .map(|monkey| monkey.divisible_by_test)
         .fold(1, least_common_multiple);
 
     for _ in 0..10000 {
-        do_round(&zoo, &mut dynamics, &|x| x % common_multiple);
+        do_round(&mut zoo, &|x| x % common_multiple);
     }
 
-    let mut inspections: Vec<usize> = dynamics
-        .into_iter()
+    let mut inspections: Vec<usize> = zoo
+        .dynamics
+        .iter()
         .map(|monkey| monkey.count_inspected)
         .collect();
     inspections.sort();
@@ -338,8 +357,9 @@ Monkey 3:
         assert_eq!(zoo.len(), 4);
 
         assert_eq!(
-            zoo.into_iter()
-                .map(|m| m.starting_items)
+            zoo.dynamics
+                .into_iter()
+                .map(|m| m.items.clone())
                 .collect::<Vec<Vec<_>>>(),
             vec![
                 vec![79, 98],
@@ -353,14 +373,13 @@ Monkey 3:
 
     #[test]
     fn test_do_round() -> Result<(), Box<dyn Error>> {
-        let zoo = parse_zoo(EXAMPLE)?;
-        let mut dynamics: Vec<MonkeyDynamics> = zoo.iter().map(Monkey::get_dynamics).collect();
-        do_round(&zoo, &mut dynamics, &|x| x / 3);
+        let mut zoo = parse_zoo(EXAMPLE)?;
+        do_round(&mut zoo, &|x| x / 3);
 
         assert_eq!(
-            dynamics
-                .into_iter()
-                .map(|m| m.items)
+            zoo.dynamics
+                .iter()
+                .map(|m| m.items.clone())
                 .collect::<Vec<Vec<_>>>(),
             vec![
                 vec![20, 23, 27, 26],
