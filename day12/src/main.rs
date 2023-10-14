@@ -33,8 +33,18 @@ impl HeightMap {
         None
     }
 
-    fn start(&self) -> Option<Pos> {
-        self.find(|ch| ch == b'S')
+    fn find_all(&self, pred: &dyn Fn(u8) -> bool) -> Vec<Pos> {
+        let mut results = Vec::new();
+        for row in 0..self.rows {
+            for col in 0..self.cols {
+                if let Some(ch) = self.at(Pos(row, col)) {
+                    if pred(ch) {
+                        results.push(Pos(row, col));
+                    }
+                }
+            }
+        }
+        results
     }
 
     fn at(&self, p: Pos) -> Option<u8> {
@@ -101,18 +111,34 @@ impl FromStr for HeightMap {
 }
 
 fn part_1(h: &HeightMap) -> Option<u32> {
+    search(h, h.find(|ch| ch == b'S'))
+}
+
+fn part_2(h: &HeightMap) -> Option<u32> {
+    search(h, h.find_all(&|p| p == b'a' || p == b'S'))
+}
+
+fn search(h: &HeightMap, starting_positions: impl IntoIterator<Item = Pos>) -> Option<u32> {
+    // Keep a queue of (position, distance) pairs.
     let mut queue = VecDeque::<(Pos, u32)>::new();
-    queue.push_back((h.start()?, 0));
+    for starting in starting_positions {
+        queue.push_back((starting, 0));
+    }
+
     let mut visited = HashSet::<Pos>::new();
 
     while let Some((p, dist)) = queue.pop_front() {
+        // Skip if we've been here before.
         if visited.contains(&p) {
             continue;
         }
+
         // Terminate search early if we hit the end.
         if h.at(p) == Some(b'E') {
             return Some(dist);
         }
+
+        // Mark the visit and queue up the neighbors that we can visit.
         visited.insert(p);
 
         let p_height = h.height(p)?;
@@ -121,8 +147,8 @@ fn part_1(h: &HeightMap) -> Option<u32> {
             .into_iter()
             .filter(|&candidate| {
                 if let Some(candidate_height) = h.height(candidate) {
-                    // You can either descend, stay at the same height, or
-                    // raise by one.
+                    // We can either descend, stay at the same height, or
+                    // climb up by one.
                     candidate_height <= (p_height + 1)
                 } else {
                     false
@@ -140,6 +166,7 @@ fn main() {
     let input = std::fs::read_to_string("input.txt").unwrap();
     let h: HeightMap = input.parse().unwrap();
     println!("part 1: {:?}", part_1(&h));
+    println!("part 2: {:?}", part_2(&h));
 }
 
 #[cfg(test)]
@@ -181,9 +208,9 @@ abdefghi";
     }
 
     #[test]
-    fn test_start() {
+    fn test_find() {
         let h: HeightMap = SMALL_MAP.parse().expect("Oops");
-        assert_eq!(h.start(), Some(Pos(0, 0)));
+        assert_eq!(h.find(|ch| ch == b'S'), Some(Pos(0, 0)));
     }
 
     #[test]
@@ -205,5 +232,21 @@ abdefghi";
     fn test_part_1() {
         let h: HeightMap = SMALL_MAP.parse().expect("Oops");
         assert_eq!(part_1(&h), Some(31));
+    }
+
+    #[test]
+    fn test_find_all() {
+        let h: HeightMap = SMALL_MAP.parse().expect("Oops");
+        assert_eq!(
+            h.find_all(&|p| p == b'a' || p == b'S'),
+            vec![
+                Pos(0, 0),
+                Pos(0, 1),
+                Pos(1, 0),
+                Pos(2, 0),
+                Pos(3, 0),
+                Pos(4, 0)
+            ]
+        );
     }
 }
