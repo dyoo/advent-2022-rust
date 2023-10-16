@@ -1,6 +1,6 @@
+use logos::{Lexer, Logos};
 use std::cmp::Ordering;
 use std::iter::Peekable;
-use std::str::Bytes;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 enum Data {
@@ -55,32 +55,31 @@ impl Ord for Data {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Logos, Debug, PartialEq)]
+#[logos(skip r"[ \t\n\f]+")] // ignore whitespace
 enum Token {
+    #[regex(r"\d+", |lex| lex.slice().parse().ok())]
     Num(u32),
+
+    #[token("[")]
     Lbracket,
+
+    #[token("]")]
     Rbracket,
+
+    #[token(",")]
     Comma,
 }
 
 struct Tokenizer<'a> {
-    peekable: Peekable<Bytes<'a>>,
+    lexer: Lexer<'a, Token>,
 }
 
 impl<'a> Tokenizer<'a> {
     fn new(s: &'a str) -> Self {
         Tokenizer {
-            peekable: s.bytes().peekable(),
+            lexer: Token::lexer(s),
         }
-    }
-
-    fn tokenize_number(&mut self) -> u32 {
-        let mut n: u32 = 0;
-        while let Some(digit @ b'0'..=b'9') = self.peekable.peek() {
-            n = n * 10 + (digit - b'0') as u32;
-            self.peekable.next();
-        }
-        n
     }
 }
 
@@ -88,32 +87,9 @@ impl<'a> Iterator for Tokenizer<'a> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            match self.peekable.peek() {
-                Some(b'0'..=b'9') => {
-                    return Some(Token::Num(self.tokenize_number()));
-                }
-                Some(b'[') => {
-                    self.peekable.next();
-                    return Some(Token::Lbracket);
-                }
-                Some(b']') => {
-                    self.peekable.next();
-                    return Some(Token::Rbracket);
-                }
-                Some(b',') => {
-                    self.peekable.next();
-                    return Some(Token::Comma);
-                }
-                None => {
-                    return None;
-                }
-
-                _ => {
-                    // Skip unknown characters.
-                    self.peekable.next();
-                }
-            }
+        match self.lexer.next() {
+            Some(Ok(token)) => Some(token),
+            _ => None,
         }
     }
 }
