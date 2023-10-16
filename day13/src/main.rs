@@ -2,15 +2,16 @@ use std::cmp::Ordering;
 use std::iter::Peekable;
 use std::str::Bytes;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 enum Data {
     Num(u32),
     List(Vec<Data>),
 }
+
 impl Data {
     fn cmp(&self, rhs: &Data) -> Ordering {
         match (self, rhs) {
-            (Data::Num(lhs), Data::Num(rhs)) => lhs.cmp(&rhs),
+            (Data::Num(lhs), Data::Num(rhs)) => lhs.cmp(rhs),
             (Data::Num(lhs), rhs @ Data::List(_)) => {
                 Data::cmp(&Data::List(vec![Data::Num(*lhs)]), rhs)
             }
@@ -45,6 +46,18 @@ impl Data {
                 }
             }
         }
+    }
+}
+
+impl PartialOrd for Data {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(std::cmp::Ord::cmp(self, other))
+    }
+}
+
+impl Ord for Data {
+    fn cmp(&self, other: &Self) -> Ordering {
+        Data::cmp(self, other)
     }
 }
 
@@ -174,7 +187,7 @@ where
 }
 
 fn part1(input: &str) -> i32 {
-    let mut parser = Parser::new(Tokenizer::new(&input));
+    let mut parser = Parser::new(Tokenizer::new(input));
     let mut index = 1;
     let mut sum = 0;
     while let (Some(l), Some(r)) = (parser.next(), parser.next()) {
@@ -187,16 +200,16 @@ fn part1(input: &str) -> i32 {
 }
 
 fn part2(input: &str) -> Option<usize> {
-    let mut items: Vec<Data> = Parser::new(Tokenizer::new(&input)).collect();
+    let mut items: Vec<Data> = Parser::new(Tokenizer::new(input)).collect();
     let divider1 = parse("[[2]]");
     let divider2 = parse("[[6]]");
     items.push(divider1.clone());
     items.push(divider2.clone());
 
-    items.sort_by(Data::cmp);
+    items.sort();
 
-    let index1 = items.binary_search_by(|v| Data::cmp(v, &divider1));
-    let index2 = items.binary_search_by(|v| Data::cmp(v, &divider2));
+    let index1 = items.binary_search(&divider1);
+    let index2 = items.binary_search(&divider2);
     Some(index1.map(|x| x + 1).ok()? * index2.map(|x| x + 1).ok()?)
 }
 
