@@ -7,6 +7,46 @@ enum Data {
     Num(u32),
     List(Vec<Data>),
 }
+impl Data {
+    fn cmp(&self, rhs: &Data) -> Ordering {
+        match (self, rhs) {
+            (Data::Num(lhs), Data::Num(rhs)) => lhs.cmp(&rhs),
+            (Data::Num(lhs), rhs @ Data::List(_)) => {
+                Data::cmp(&Data::List(vec![Data::Num(*lhs)]), rhs)
+            }
+            (lhs @ Data::List(_), Data::Num(rhs)) => {
+                Data::cmp(lhs, &Data::List(vec![Data::Num(*rhs)]))
+            }
+            (Data::List(lhs_items), Data::List(rhs_items)) => {
+                let mut lhs_iter = lhs_items.iter();
+                let mut rhs_iter = rhs_items.iter();
+
+                loop {
+                    match (lhs_iter.next(), rhs_iter.next()) {
+                        (None, None) => {
+                            return Ordering::Equal;
+                        }
+                        (None, Some(_)) => {
+                            return Ordering::Less;
+                        }
+                        (Some(_), None) => {
+                            return Ordering::Greater;
+                        }
+                        (Some(l), Some(r)) => match Data::cmp(l, r) {
+                            Ordering::Less => {
+                                return Ordering::Less;
+                            }
+                            Ordering::Greater => {
+                                return Ordering::Greater;
+                            }
+                            Ordering::Equal => {}
+                        },
+                    }
+                }
+            }
+        }
+    }
+}
 
 #[derive(Debug, PartialEq)]
 enum Token {
@@ -133,51 +173,12 @@ where
     }
 }
 
-fn data_cmp(left: &Data, right: &Data) -> Ordering {
-    match (left, right) {
-        (Data::Num(left), Data::Num(right)) => left.cmp(&right),
-        (Data::Num(left), right @ Data::List(_)) => {
-            data_cmp(&Data::List(vec![Data::Num(*left)]), right)
-        }
-        (left @ Data::List(_), Data::Num(right)) => {
-            data_cmp(left, &Data::List(vec![Data::Num(*right)]))
-        }
-        (Data::List(lefts), Data::List(rights)) => {
-            let mut left_items = lefts.iter();
-            let mut right_items = rights.iter();
-
-            loop {
-                match (left_items.next(), right_items.next()) {
-                    (None, None) => {
-                        return Ordering::Equal;
-                    }
-                    (None, Some(_)) => {
-                        return Ordering::Less;
-                    }
-                    (Some(_), None) => {
-                        return Ordering::Greater;
-                    }
-                    (Some(l), Some(r)) => match data_cmp(l, r) {
-                        Ordering::Less => {
-                            return Ordering::Less;
-                        }
-                        Ordering::Greater => {
-                            return Ordering::Greater;
-                        }
-                        Ordering::Equal => {}
-                    },
-                }
-            }
-        }
-    }
-}
-
 fn part1(input: &str) -> i32 {
     let mut parser = Parser::new(Tokenizer::new(&input));
     let mut index = 1;
     let mut sum = 0;
     while let (Some(l), Some(r)) = (parser.next(), parser.next()) {
-        if data_cmp(&l, &r).is_lt() {
+        if Data::cmp(&l, &r).is_lt() {
             sum += index;
         }
         index += 1;
@@ -192,10 +193,10 @@ fn part2(input: &str) -> Option<usize> {
     items.push(divider1.clone());
     items.push(divider2.clone());
 
-    items.sort_by(data_cmp);
+    items.sort_by(Data::cmp);
 
-    let index1 = items.binary_search_by(|v| data_cmp(v, &divider1));
-    let index2 = items.binary_search_by(|v| data_cmp(v, &divider2));
+    let index1 = items.binary_search_by(|v| Data::cmp(v, &divider1));
+    let index2 = items.binary_search_by(|v| Data::cmp(v, &divider2));
     Some(index1.map(|x| x + 1).ok()? * index2.map(|x| x + 1).ok()?)
 }
 
@@ -314,47 +315,47 @@ mod tests {
     #[test]
     fn test_cmp_data() {
         assert_eq!(
-            data_cmp(&parse("[1,1,3,1,1]"), &parse("[1,1,5,1,1]")),
+            Data::cmp(&parse("[1,1,3,1,1]"), &parse("[1,1,5,1,1]")),
             Ordering::Less
         );
 
         assert_eq!(
-            data_cmp(&parse("[[1],[2,3,4]]"), &parse("[[1],4]")),
+            Data::cmp(&parse("[[1],[2,3,4]]"), &parse("[[1],4]")),
             Ordering::Less
         );
 
         assert_eq!(
-            data_cmp(&parse("[9]"), &parse("[[8,7,6]]")),
+            Data::cmp(&parse("[9]"), &parse("[[8,7,6]]")),
             Ordering::Greater
         );
 
         assert_eq!(
-            data_cmp(&parse("[[4,4],4,4]"), &parse("[[4,4],4,4,4]")),
+            Data::cmp(&parse("[[4,4],4,4]"), &parse("[[4,4],4,4,4]")),
             Ordering::Less
         );
 
         assert_eq!(
-            data_cmp(&parse("[7,7,7,7]"), &parse("[7,7,7]")),
+            Data::cmp(&parse("[7,7,7,7]"), &parse("[7,7,7]")),
             Ordering::Greater
         );
 
-        assert_eq!(data_cmp(&parse("[]"), &parse("[3]")), Ordering::Less);
+        assert_eq!(Data::cmp(&parse("[]"), &parse("[3]")), Ordering::Less);
 
         assert_eq!(
-            data_cmp(&parse("[[[]]]"), &parse("[[]]")),
+            Data::cmp(&parse("[[[]]]"), &parse("[[]]")),
             Ordering::Greater
         );
 
         assert_eq!(
-            data_cmp(
+            Data::cmp(
                 &parse("[1,[2,[3,[4,[5,6,7]]]],8,9]"),
                 &parse("[1,[2,[3,[4,[5,6,0]]]],8,9]")
             ),
             Ordering::Greater
         );
 
-        assert_eq!(data_cmp(&parse("[[2]]"), &parse("[[2]]")), Ordering::Equal);
-        assert_eq!(data_cmp(&parse("[[6]]"), &parse("[[6]]")), Ordering::Equal);
+        assert_eq!(Data::cmp(&parse("[[2]]"), &parse("[[2]]")), Ordering::Equal);
+        assert_eq!(Data::cmp(&parse("[[6]]"), &parse("[[6]]")), Ordering::Equal);
     }
 
     #[test]
