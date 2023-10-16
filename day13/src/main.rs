@@ -8,7 +8,13 @@ enum Data {
     List(Vec<Data>),
 }
 
-impl Data {
+impl PartialOrd for Data {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Data {
     fn cmp(&self, rhs: &Data) -> Ordering {
         match (self, rhs) {
             (Data::Num(lhs), Data::Num(rhs)) => lhs.cmp(rhs),
@@ -46,18 +52,6 @@ impl Data {
                 }
             }
         }
-    }
-}
-
-impl PartialOrd for Data {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(std::cmp::Ord::cmp(self, other))
-    }
-}
-
-impl Ord for Data {
-    fn cmp(&self, other: &Self) -> Ordering {
-        Data::cmp(self, other)
     }
 }
 
@@ -375,7 +369,8 @@ mod tests {
     fn test_part2() {
         assert_eq!(
             part2(
-                "[1,1,3,1,1]
+                "
+[1,1,3,1,1]
 [1,1,5,1,1]
 
 [[1],[2,3,4]]
