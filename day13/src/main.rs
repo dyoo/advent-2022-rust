@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::iter::Peekable;
 use std::str::Bytes;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 enum Data {
     Num(u32),
     List(Vec<Data>),
@@ -185,18 +185,33 @@ fn part1(input: &str) -> i32 {
     sum
 }
 
+fn part2(input: &str) -> Option<usize> {
+    let mut items: Vec<Data> = Parser::new(Tokenizer::new(&input)).collect();
+    let divider1 = parse("[[2]]");
+    let divider2 = parse("[[6]]");
+    items.push(divider1.clone());
+    items.push(divider2.clone());
+
+    items.sort_by(data_cmp);
+
+    let index1 = items.binary_search_by(|v| data_cmp(v, &divider1));
+    let index2 = items.binary_search_by(|v| data_cmp(v, &divider2));
+    Some(index1.map(|x| x + 1).ok()? * index2.map(|x| x + 1).ok()?)
+}
+
+fn parse(s: &str) -> Data {
+    Parser::new(Tokenizer::new(s)).next().expect("a data")
+}
+
 fn main() {
     let input = std::fs::read_to_string("input.txt").unwrap();
-    println!("part 1: {}", part1(&input));
+    println!("part 1: {:?}", part1(&input));
+    println!("part 2: {:?}", part2(&input));
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn parse(s: &str) -> Data {
-        Parser::new(Tokenizer::new(s)).next().expect("a data")
-    }
 
     #[test]
     fn test_tokenize_number() {
@@ -336,6 +351,41 @@ mod tests {
                 &parse("[1,[2,[3,[4,[5,6,0]]]],8,9]")
             ),
             Ordering::Greater
+        );
+
+        assert_eq!(data_cmp(&parse("[[2]]"), &parse("[[2]]")), Ordering::Equal);
+        assert_eq!(data_cmp(&parse("[[6]]"), &parse("[[6]]")), Ordering::Equal);
+    }
+
+    #[test]
+    fn test_part2() {
+        assert_eq!(
+            part2(
+                "[1,1,3,1,1]
+[1,1,5,1,1]
+
+[[1],[2,3,4]]
+[[1],4]
+
+[9]
+[[8,7,6]]
+
+[[4,4],4,4]
+[[4,4],4,4,4]
+
+[7,7,7,7]
+[7,7,7]
+
+[]
+[3]
+
+[[[]]]
+[[]]
+
+[1,[2,[3,[4,[5,6,7]]]],8,9]
+[1,[2,[3,[4,[5,6,0]]]],8,9]"
+            ),
+            Some(140)
         );
     }
 }
