@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::iter::Peekable;
 use std::str::Bytes;
 
@@ -132,17 +133,70 @@ where
     }
 }
 
+fn data_cmp(left: &Data, right: &Data) -> Ordering {
+    match (left, right) {
+        (Data::Num(left), Data::Num(right)) => left.cmp(&right),
+        (Data::Num(left), right @ Data::List(_)) => {
+            data_cmp(&Data::List(vec![Data::Num(*left)]), right)
+        }
+        (left @ Data::List(_), Data::Num(right)) => {
+            data_cmp(left, &Data::List(vec![Data::Num(*right)]))
+        }
+        (Data::List(lefts), Data::List(rights)) => {
+            let mut left_items = lefts.iter();
+            let mut right_items = rights.iter();
+
+            loop {
+                match (left_items.next(), right_items.next()) {
+                    (None, None) => {
+                        return Ordering::Equal;
+                    }
+                    (None, Some(_)) => {
+                        return Ordering::Less;
+                    }
+                    (Some(_), None) => {
+                        return Ordering::Greater;
+                    }
+                    (Some(l), Some(r)) => match data_cmp(l, r) {
+                        Ordering::Less => {
+                            return Ordering::Less;
+                        }
+                        Ordering::Greater => {
+                            return Ordering::Greater;
+                        }
+                        Ordering::Equal => {}
+                    },
+                }
+            }
+        }
+    }
+}
+
+fn part1(input: &str) -> i32 {
+    let mut parser = Parser::new(Tokenizer::new(&input));
+    let mut index = 1;
+    let mut sum = 0;
+    while let (Some(l), Some(r)) = (parser.next(), parser.next()) {
+        if data_cmp(&l, &r).is_lt() {
+            sum += index;
+        }
+        index += 1;
+    }
+    sum
+}
+
 fn main() {
     let input = std::fs::read_to_string("input.txt").unwrap();
-    let mut parser = Parser::new(Tokenizer::new(&input));
-    while let Some(item) = parser.next() {
-	println!("{:?}", item);
-    }
+    println!("part 1: {}", part1(&input));
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn parse(s: &str) -> Data {
+        Parser::new(Tokenizer::new(s)).next().expect("a data")
+    }
 
     #[test]
     fn test_tokenize_number() {
@@ -240,5 +294,48 @@ mod tests {
             ]))
         );
         assert_eq!(parser.next(), None);
+    }
+
+    #[test]
+    fn test_cmp_data() {
+        assert_eq!(
+            data_cmp(&parse("[1,1,3,1,1]"), &parse("[1,1,5,1,1]")),
+            Ordering::Less
+        );
+
+        assert_eq!(
+            data_cmp(&parse("[[1],[2,3,4]]"), &parse("[[1],4]")),
+            Ordering::Less
+        );
+
+        assert_eq!(
+            data_cmp(&parse("[9]"), &parse("[[8,7,6]]")),
+            Ordering::Greater
+        );
+
+        assert_eq!(
+            data_cmp(&parse("[[4,4],4,4]"), &parse("[[4,4],4,4,4]")),
+            Ordering::Less
+        );
+
+        assert_eq!(
+            data_cmp(&parse("[7,7,7,7]"), &parse("[7,7,7]")),
+            Ordering::Greater
+        );
+
+        assert_eq!(data_cmp(&parse("[]"), &parse("[3]")), Ordering::Less);
+
+        assert_eq!(
+            data_cmp(&parse("[[[]]]"), &parse("[[]]")),
+            Ordering::Greater
+        );
+
+        assert_eq!(
+            data_cmp(
+                &parse("[1,[2,[3,[4,[5,6,7]]]],8,9]"),
+                &parse("[1,[2,[3,[4,[5,6,0]]]],8,9]")
+            ),
+            Ordering::Greater
+        );
     }
 }
