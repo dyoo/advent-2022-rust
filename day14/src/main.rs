@@ -18,14 +18,14 @@ impl Cave {
         }
     }
 
-    fn at(&self, p: Pos) -> Cell {
-        self.cells.get(&p).copied().unwrap_or(Cell::Empty)
+    fn at(&self, p: Pos) -> Option<Cell> {
+        self.cells.get(&p).copied()
     }
 
     fn add_wall(&mut self, p: Pos) {
         self.cells.insert(p, Cell::Wall);
         if p.1 >= self.y_boundary {
-            self.y_boundary = p.1 + 1;
+            self.y_boundary = p.1 + 2;
         }
     }
 
@@ -63,12 +63,16 @@ impl Cave {
     }
 
     // Returns `true` if sand is at rest, `false` if it falls into the abyss.
-    fn drop_sand(&mut self, mut p: Pos) -> bool {
+    fn drop_sand_part_1(&mut self, mut p: Pos) -> bool {
         while p.1 != self.y_boundary {
             let lower_left = Pos(p.0 - 1, p.1 + 1);
             let down = Pos(p.0, p.1 + 1);
             let lower_right = Pos(p.0 + 1, p.1 + 1);
-            match (self.at(lower_left), self.at(down), self.at(lower_right)) {
+            match (
+                self.at(lower_left).unwrap_or(Cell::Empty),
+                self.at(down).unwrap_or(Cell::Empty),
+                self.at(lower_right).unwrap_or(Cell::Empty),
+            ) {
                 (_, Cell::Empty, _) => {
                     p = down;
                 }
@@ -90,6 +94,42 @@ impl Cave {
         } else {
             false
         }
+    }
+
+    /** Tells where the sand was dropped */
+    fn drop_sand_part_2(&mut self, mut p: Pos) -> Pos {
+        loop {
+            let lower_left = Pos(p.0 - 1, p.1 + 1);
+            let down = Pos(p.0, p.1 + 1);
+            let lower_right = Pos(p.0 + 1, p.1 + 1);
+            let bottom_boundary = if p.1 + 1 == self.y_boundary {
+                Cell::Wall
+            } else {
+                Cell::Empty
+            };
+            match (
+                self.at(lower_left).unwrap_or(bottom_boundary),
+                self.at(down).unwrap_or(bottom_boundary),
+                self.at(lower_right).unwrap_or(bottom_boundary),
+            ) {
+                (_, Cell::Empty, _) => {
+                    p = down;
+                }
+                (Cell::Empty, _, _) => {
+                    p = lower_left;
+                }
+                (_, _, Cell::Empty) => {
+                    p = lower_right;
+                }
+                _ => {
+                    break;
+                }
+            }
+        }
+
+        self.cells.insert(p, Cell::Sand);
+
+        p
     }
 }
 
@@ -147,7 +187,27 @@ fn part_1(input: &str) -> usize {
 
     let mut i = 0;
     loop {
-        if !cave.drop_sand(Pos(500, 0)) {
+        if !cave.drop_sand_part_1(Pos(500, 0)) {
+            return i;
+        }
+        i += 1;
+    }
+}
+
+fn part_2(input: &str) -> usize {
+    let position_lists: Vec<Vec<Pos>> = input.lines().map(parse_line).collect();
+    let mut cave = Cave::new();
+
+    // Fill in the walls
+    for positions in position_lists {
+        for pair in positions.windows(2) {
+            cave.fill_wall_line(pair[0], pair[1]);
+        }
+    }
+
+    let mut i = 1;
+    loop {
+        if cave.drop_sand_part_2(Pos(500, 0)) == Pos(500, 0) {
             return i;
         }
         i += 1;
@@ -157,6 +217,7 @@ fn part_1(input: &str) -> usize {
 fn main() {
     let input = std::fs::read_to_string("input.txt").expect("input.txt");
     println!("part 1: {}", part_1(&input));
+    println!("part 1: {}", part_2(&input));
 }
 
 #[cfg(test)]
@@ -184,7 +245,7 @@ mod tests {
                 (Pos(0, 3), Cell::Wall),
             ])
         );
-        assert_eq!(cave.y_boundary, 4);
+        assert_eq!(cave.y_boundary, 5);
     }
 
     #[test]
@@ -200,7 +261,7 @@ mod tests {
                 (Pos(1, 0), Cell::Wall),
             ])
         );
-        assert_eq!(cave.y_boundary, 4);
+        assert_eq!(cave.y_boundary, 5);
     }
 
     #[test]
@@ -215,7 +276,7 @@ mod tests {
                 (Pos(0, 3), Cell::Wall),
             ])
         );
-        assert_eq!(cave.y_boundary, 4);
+        assert_eq!(cave.y_boundary, 5);
     }
 
     #[test]
@@ -230,7 +291,7 @@ mod tests {
                 (Pos(0, 3), Cell::Wall),
             ])
         );
-        assert_eq!(cave.y_boundary, 4);
+        assert_eq!(cave.y_boundary, 5);
     }
 
     #[test]
@@ -238,15 +299,15 @@ mod tests {
         let mut cave = Cave::new();
         cave.fill_wall_line(Pos(2, 3), Pos(2, 3));
         assert_eq!(cave.cells, HashMap::from([(Pos(2, 3), Cell::Wall),]));
-        assert_eq!(cave.y_boundary, 4);
+        assert_eq!(cave.y_boundary, 5);
     }
 
     #[test]
     fn test_at() {
         let mut cave = Cave::new();
         cave.fill_wall_line(Pos(2, 3), Pos(2, 3));
-        assert_eq!(cave.at(Pos(2, 3)), Cell::Wall);
-        assert_eq!(cave.at(Pos(2, 4)), Cell::Empty);
+        assert_eq!(cave.at(Pos(2, 3)), Some(Cell::Wall));
+        assert_eq!(cave.at(Pos(2, 4)), None);
     }
 
     #[test]
@@ -254,5 +315,12 @@ mod tests {
         let input = "498,4 -> 498,6 -> 496,6
 503,4 -> 502,4 -> 502,9 -> 494,9";
         assert_eq!(part_1(&input), 24);
+    }
+
+    #[test]
+    fn test_part2() {
+        let input = "498,4 -> 498,6 -> 496,6
+503,4 -> 502,4 -> 502,9 -> 494,9";
+        assert_eq!(part_2(&input), 93);
     }
 }
