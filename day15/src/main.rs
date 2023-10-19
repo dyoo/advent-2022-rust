@@ -4,8 +4,10 @@ use regex::Regex;
 use std::str::FromStr;
 use std::sync::OnceLock;
 
-use gcollections::ops::constructor::{Empty, Singleton};
-use gcollections::ops::{Cardinality, Difference, Union};
+use gcollections::ops::{
+    constructor::{Empty, Singleton},
+    Bounded, Cardinality, Difference, Union,
+};
 use interval::interval_set::IntervalSet;
 use interval::ops::Range;
 
@@ -16,6 +18,10 @@ impl Pos {
     // Returns Manhattan distance between two Pos.
     fn dist(self, other: Self) -> u32 {
         self.0.abs_diff(other.0) + self.1.abs_diff(other.1)
+    }
+
+    fn signal_strength(self) -> u64 {
+        self.0 as u64 * 4000000 + self.1 as u64
     }
 }
 
@@ -108,10 +114,38 @@ fn part_1(input: &str, y: i32) -> usize {
         .sum()
 }
 
+fn find_distress_beacon(
+    sensor_data: &Vec<SensorData>,
+    x_bounds: i32,
+    y_bounds: i32,
+) -> Option<Pos> {
+    for y in 0..=y_bounds {
+        let mut positions = IntervalSet::new(0, x_bounds);
+        for data in sensor_data {
+            positions = positions.difference(&data.get_boundary(y));
+        }
+        if positions.size() == 1 {
+            return Some(Pos(positions.iter().next().unwrap().lower(), y));
+        }
+    }
+
+    None
+}
+
+fn part_2(input: &str, x_bounds: i32, y_bounds: i32) -> Option<u64> {
+    let all_sensor_data: Vec<SensorData> = input
+        .lines()
+        .map(SensorData::from_str)
+        .collect::<Result<_, _>>()
+        .expect("could not parse clean sensor data");
+    find_distress_beacon(&all_sensor_data, x_bounds, y_bounds).map(Pos::signal_strength)
+}
+
 fn main() {
     let input = std::fs::read_to_string("input.txt").expect("input.txt");
 
-    println!("part 1: {}", part_1(&input, 2000000));
+    println!("part 1: {:?}", part_1(&input, 2000000));
+    println!("part 2: {:?}", part_2(&input, 4000000, 4000000));
 }
 
 #[cfg(test)]
@@ -161,5 +195,18 @@ Sensor at x=20, y=1: closest beacon is at x=15, y=3";
     #[test]
     fn test_part_1() {
         assert_eq!(part_1(TEST_INPUT, 10), 26);
+    }
+
+    #[test]
+    fn test_find_distress_beacon() {
+        let sensor_data: Vec<SensorData> = TEST_INPUT
+            .lines()
+            .map(SensorData::from_str)
+            .collect::<Result<_, _>>()
+            .expect("could not parse clean sensor data");
+        assert_eq!(
+            find_distress_beacon(&sensor_data, 20, 20),
+            Some(Pos(14, 11))
+        );
     }
 }
