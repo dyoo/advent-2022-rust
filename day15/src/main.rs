@@ -1,9 +1,13 @@
 // https://adventofcode.com/2022/day/15
 
 use regex::Regex;
-use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::OnceLock;
+
+use gcollections::ops::constructor::{Empty, Singleton};
+use gcollections::ops::{Cardinality, Difference, Union};
+use interval::interval_set::IntervalSet;
+use interval::ops::Range;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 struct Pos(i32, i32);
@@ -26,19 +30,17 @@ impl SensorData {
         self.sensor_at.dist(self.beacon_at)
     }
 
-    // Returns a list of positions bounded by the marker and beacon.
-    fn get_boundary(&self, y: i32) -> Vec<Pos> {
-        let mut result = Vec::new();
+    // Returns a bound of positions bounded by the marker and beacon on line y.
+    fn get_boundary(&self, y: i32) -> IntervalSet<i32> {
         let beacon_radius = self.beacon_radius();
         let y_distance_from_sensor = self.sensor_at.1.abs_diff(y);
         if y_distance_from_sensor <= beacon_radius {
             let delta = (beacon_radius - y_distance_from_sensor) as i32;
-            for i in -delta..=delta {
-                result.push(Pos(self.sensor_at.0 + i as i32, y));
-            }
+            let (left, right) = ((self.sensor_at.0 - delta), (self.sensor_at.0 + delta));
+            IntervalSet::new(left, right)
+        } else {
+            IntervalSet::empty()
         }
-
-        result
     }
 }
 
@@ -83,27 +85,33 @@ impl FromStr for SensorData {
     }
 }
 
-fn part_1(input: &str) -> usize {
+fn part_1(input: &str, y: i32) -> usize {
     let all_sensor_data: Vec<SensorData> = input
         .lines()
         .map(SensorData::from_str)
         .collect::<Result<_, _>>()
         .expect("could not parse clean sensor data");
-    let mut positions = HashSet::new();
+
+    let mut positions = IntervalSet::empty();
     for data in &all_sensor_data {
-        positions.extend(data.get_boundary(2000000));
+        positions = positions.union(&data.get_boundary(y));
     }
     for data in &all_sensor_data {
-        positions.remove(&data.beacon_at);
+        if data.beacon_at.1 == y {
+            positions = positions.difference(&IntervalSet::singleton(data.beacon_at.0));
+        }
     }
 
-    positions.len()
+    positions
+        .iter()
+        .map(|interval| interval.size() as usize)
+        .sum()
 }
 
 fn main() {
     let input = std::fs::read_to_string("input.txt").expect("input.txt");
 
-    println!("part 1: {}", part_1(&input));
+    println!("part 1: {}", part_1(&input, 2000000));
 }
 
 #[cfg(test)]
@@ -129,9 +137,9 @@ mod tests {
             sensor_at: Pos(8, 7),
             beacon_at: Pos(2, 10),
         };
-        assert_eq!(s.get_boundary(-3), vec![]);
-        assert_eq!(s.get_boundary(-2), vec![Pos(8, -2)]);
-        assert_eq!(s.get_boundary(-1), vec![Pos(7, -1), Pos(8, -1), Pos(9, -1)]);
+        assert_eq!(s.get_boundary(-3), IntervalSet::empty());
+        assert_eq!(s.get_boundary(-2), IntervalSet::singleton(8));
+        assert_eq!(s.get_boundary(-1), IntervalSet::new(7, 9));
     }
 
     const TEST_INPUT: &str = "\
@@ -149,4 +157,9 @@ Sensor at x=17, y=20: closest beacon is at x=21, y=22
 Sensor at x=16, y=7: closest beacon is at x=15, y=3
 Sensor at x=14, y=3: closest beacon is at x=15, y=3
 Sensor at x=20, y=1: closest beacon is at x=15, y=3";
+
+    #[test]
+    fn test_part_1() {
+        assert_eq!(part_1(TEST_INPUT, 10), 26);
+    }
 }
