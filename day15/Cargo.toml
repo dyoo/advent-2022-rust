@@ -8,4 +8,5 @@ edition = "2021"
 [dependencies]
 gcollections = "1.5.0"
 intervallum = "1.4.0"
+range-set-blaze = "0.1.9"
 regex = "1.10.2"

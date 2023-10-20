@@ -1,15 +1,10 @@
 // https://adventofcode.com/2022/day/15
 
+use range_set_blaze::RangeSetBlaze;
 use regex::Regex;
+use std::ops::RangeInclusive;
 use std::str::FromStr;
 use std::sync::OnceLock;
-
-use gcollections::ops::{
-    constructor::{Empty, Singleton},
-    Bounded, Cardinality, Difference, Union,
-};
-use interval::interval_set::IntervalSet;
-use interval::ops::Range;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 struct Pos(i32, i32);
@@ -37,15 +32,15 @@ impl SensorData {
     }
 
     // Returns a bound of positions bounded by the marker and beacon on line y.
-    fn get_boundary(&self, y: i32) -> IntervalSet<i32> {
+    fn get_boundary(&self, y: i32) -> Option<RangeInclusive<i32>> {
         let beacon_radius = self.beacon_radius();
         let y_distance_from_sensor = self.sensor_at.1.abs_diff(y);
         if y_distance_from_sensor <= beacon_radius {
             let delta = (beacon_radius - y_distance_from_sensor) as i32;
             let (left, right) = ((self.sensor_at.0 - delta), (self.sensor_at.0 + delta));
-            IntervalSet::new(left, right)
+            Some(left..=right)
         } else {
-            IntervalSet::empty()
+            None
         }
     }
 }
@@ -98,20 +93,18 @@ fn part_1(input: &str, y: i32) -> usize {
         .collect::<Result<_, _>>()
         .expect("could not parse clean sensor data");
 
-    let mut positions = IntervalSet::empty();
+    let mut positions = RangeSetBlaze::new();
     for data in &all_sensor_data {
-        positions = positions.union(&data.get_boundary(y));
+        positions.extend(data.get_boundary(y));
     }
+
     for data in &all_sensor_data {
         if data.beacon_at.1 == y {
-            positions = positions.difference(&IntervalSet::singleton(data.beacon_at.0));
+            positions.remove(data.beacon_at.0);
         }
     }
 
-    positions
-        .iter()
-        .map(|interval| interval.size() as usize)
-        .sum()
+    positions.len()
 }
 
 fn find_distress_beacon(
@@ -119,13 +112,16 @@ fn find_distress_beacon(
     x_bounds: i32,
     y_bounds: i32,
 ) -> Option<Pos> {
+    let x_range = RangeSetBlaze::from_iter([0..=x_bounds]);
+
     for y in 0..=y_bounds {
-        let mut positions = IntervalSet::new(0, x_bounds);
+        let mut positions = RangeSetBlaze::new();
         for data in sensor_data {
-            positions = positions.difference(&data.get_boundary(y));
+            positions.extend(data.get_boundary(y));
         }
-        if positions.size() == 1 {
-            return Some(Pos(positions.iter().next().unwrap().lower(), y));
+
+        if !x_range.is_subset(&positions) {
+            return (x_range - positions).first().map(|x| Pos(x, y));
         }
     }
 
@@ -171,9 +167,9 @@ mod tests {
             sensor_at: Pos(8, 7),
             beacon_at: Pos(2, 10),
         };
-        assert_eq!(s.get_boundary(-3), IntervalSet::empty());
-        assert_eq!(s.get_boundary(-2), IntervalSet::singleton(8));
-        assert_eq!(s.get_boundary(-1), IntervalSet::new(7, 9));
+        assert_eq!(s.get_boundary(-3), None);
+        assert_eq!(s.get_boundary(-2), Some(8..=8));
+        assert_eq!(s.get_boundary(-1), Some(7..=9));
     }
 
     const TEST_INPUT: &str = "\
