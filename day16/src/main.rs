@@ -1,23 +1,14 @@
 use regex::Regex;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::OnceLock;
 
-// To avoid cost of copying, we use this representation of ids.
-#[derive(Debug, PartialEq, Eq, Clone, Hash, PartialOrd, Ord)]
-struct Id(Rc<String>);
-
-fn make_id(s: &str) -> Id {
-    Id(String::from(s).into())
-}
-
 #[derive(Debug, PartialEq)]
 struct Valve {
-    id: Id,
+    id: String,
     flow_rate: i32,
-    exits: Vec<Id>,
+    exits: Vec<String>,
 }
 
 impl std::str::FromStr for Valve {
@@ -36,20 +27,20 @@ impl std::str::FromStr for Valve {
             .captures(s)
             .ok_or(format!("Could not parse {:?} as Valve", s))?;
 
-        let id: Id = make_id(captures.get(1).unwrap().as_str());
+        let id = captures.get(1).unwrap().as_str().to_owned();
         let flow_rate: i32 = captures
             .get(2)
             .unwrap()
             .as_str()
             .parse::<i32>()
             .map_err(|_| "Couldn't parse flow rate")?;
-        let exits: Vec<Id> = captures
+        let exits: Vec<String> = captures
             .get(3)
             .unwrap()
             .as_str()
             .split([' ', ','])
             .filter(|s| !s.is_empty())
-            .map(make_id)
+            .map(String::from)
             .collect();
 
         Ok(Valve {
@@ -60,37 +51,79 @@ impl std::str::FromStr for Valve {
     }
 }
 
+// It's a little easier if we enumerate the valves by number rather
+// than string id.
+#[derive(Debug, PartialEq)]
+struct NormalizedValve {
+    id: usize,
+    name: String,
+    flow_rate: i32,
+    exits: Vec<usize>,
+}
+
+fn normalize_valves(valves: &[Valve]) -> Vec<NormalizedValve> {
+    let mut mapping = HashMap::new();
+    mapping.insert("AA", 0);
+    let mut count: usize = 1;
+
+    // Assign mappings for all ids.
+
+    for id in valves
+        .into_iter()
+        .map(|valve| valve.id.as_str())
+        .into_iter()
+        .chain(
+            valves
+                .into_iter()
+                .flat_map(|valve| valve.exits.iter().map(String::as_str)),
+        )
+    {
+        if !mapping.contains_key(id) {
+            mapping.insert(id, count);
+            count += 1;
+        }
+    }
+
+    let mut result: Vec<NormalizedValve> = valves
+        .iter()
+        .map(|valve| NormalizedValve {
+            id: *mapping.get(valve.id.as_str()).expect("impossible"),
+	    name: valve.id.clone(),
+            flow_rate: valve.flow_rate,
+            exits: valve
+                .exits
+                .iter()
+                .map(|id| *mapping.get(id.as_str()).expect("impossible"))
+                .collect(),
+        })
+        .collect();
+    // Force AA to be at the top of the vector.
+    result.sort_by_key(|valve| valve.id);
+    result
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 struct State {
-    at: Id,
-    open: BTreeSet<Id>,
+    at: usize,
+    open: BTreeSet<usize>,
 }
 
-fn parse_valves(s: &str) -> Result<HashMap<Id, Valve>, String> {
-    Ok(s.trim()
+fn parse_valves(s: &str) -> Result<Vec<NormalizedValve>, String> {
+    s.trim()
         .lines()
         .map(Valve::from_str)
-        .map(|result| result.map(|v| (v.id.clone(), v)))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?
-        .into_iter()
-        .collect())
+        .map(|valves| normalize_valves(&valves[..]))
+        .map_err(|e| e.to_string())
 }
 
-fn get_current_flow(open: &BTreeSet<Id>, valves: &HashMap<Id, Valve>) -> i32 {
-    open.iter()
-        .map(|id| {
-            valves
-                .get(id)
-                .unwrap_or_else(|| panic!("missing valve definition {:?}", id))
-                .flow_rate
-        })
-        .sum()
+fn get_current_flow(open: &BTreeSet<usize>, valves: &[NormalizedValve]) -> i32 {
+    open.iter().map(|id| valves[*id].flow_rate).sum()
 }
 
 fn get_optimal_total_flow(
     state: &State,
-    valves: &HashMap<Id, Valve>,
+    valves: &[NormalizedValve],
     time_left: usize,
     cache: &mut HashMap<(State, usize), i32>,
 ) -> i32 {
@@ -102,7 +135,7 @@ fn get_optimal_total_flow(
     }
 
     let current_flow = get_current_flow(&state.open, valves);
-    let current_valve = valves.get(&state.at).unwrap();
+    let current_valve = &valves[state.at];
 
     // Available actions:
     //
@@ -116,7 +149,7 @@ fn get_optimal_total_flow(
                 at: state.at.clone(),
                 open: {
                     let mut new_open = state.open.clone();
-                    new_open.insert(current_valve.id.clone());
+                    new_open.insert(current_valve.id);
                     new_open
                 },
             };
@@ -129,7 +162,7 @@ fn get_optimal_total_flow(
 
     let scores_after_moving = current_valve.exits.iter().map(|exit| {
         let new_state = State {
-            at: exit.clone(),
+            at: *exit,
             open: state.open.clone(),
         };
         get_optimal_total_flow(&new_state, valves, time_left - 1, cache)
@@ -146,7 +179,7 @@ fn get_optimal_total_flow(
 fn part_1(s: &str) -> i32 {
     let valves = parse_valves(s).unwrap();
     let start_state = State {
-        at: make_id("AA"),
+        at: 0,
         open: BTreeSet::new(),
     };
     let cache = &mut HashMap::new();
@@ -168,14 +201,14 @@ mod tests {
         assert_eq!(
             s.parse::<Valve>(),
             Ok(Valve {
-                id: make_id("AC"),
+                id: "AC".into(),
                 flow_rate: 4,
                 exits: vec![
-                    make_id("KC"),
-                    make_id("RN"),
-                    make_id("QA"),
-                    make_id("QZ"),
-                    make_id("UB"),
+                    "KC".into(),
+                    "RN".into(),
+                    "QA".into(),
+                    "QZ".into(),
+                    "UB".into(),
                 ]
             })
         );
@@ -183,28 +216,24 @@ mod tests {
 
     #[test]
     fn test_parse_valves() {
-        let input = "Valve AA has flow rate=0; tunnels lead to valves DD, II, BB
-Valve BB has flow rate=13; tunnels lead to valves CC, AA";
+        let input = "Valve AA has flow rate=0; tunnels lead to valves BB
+Valve BB has flow rate=13; tunnels lead to valves AA";
         assert_eq!(
-            parse_valves(input),
-            Ok(HashMap::from([
-                (
-                    make_id("AA"),
-                    Valve {
-                        id: make_id("AA"),
-                        flow_rate: 0,
-                        exits: vec![make_id("DD"), make_id("II"), make_id("BB"),]
-                    },
-                ),
-                (
-                    make_id("BB"),
-                    Valve {
-                        id: make_id("BB"),
-                        flow_rate: 13,
-                        exits: vec![make_id("CC"), make_id("AA")]
-                    },
-                )
-            ]))
+            parse_valves(input).unwrap(),
+            vec![
+                NormalizedValve {
+                    id: 0,
+		    name: "AA".into(),
+                    flow_rate: 0,
+                    exits: vec![1],
+                },
+                NormalizedValve {
+                    id: 1,
+		    name: "BB".into(),
+                    flow_rate: 13,
+                    exits: vec![0],
+                },
+            ]
         );
     }
 
@@ -223,19 +252,16 @@ Valve BB has flow rate=13; tunnels lead to valves CC";
 Valve AA has flow rate=5; tunnels lead to valves BB
 Valve BB has flow rate=13; tunnels lead to valves CC";
         let valves = parse_valves(input).unwrap();
-        assert_eq!(get_current_flow(&[make_id("AA")].into(), &valves), 5);
+        assert_eq!(get_current_flow(&[0].into(), &valves), 5);
     }
 
     #[test]
     fn test_get_current_flow_multiple() {
         let input = "\
 Valve AA has flow rate=5; tunnels lead to valves BB
-Valve BB has flow rate=13; tunnels lead to valves CC";
+Valve BB has flow rate=13; tunnels lead to valves AA";
         let valves = parse_valves(input).unwrap();
-        assert_eq!(
-            get_current_flow(&[make_id("AA"), make_id("BB")].into(), &valves),
-            18
-        );
+        assert_eq!(get_current_flow(&[0, 1].into(), &valves), 18);
     }
 
     const SMALL_INPUT: &str = "\
@@ -254,7 +280,7 @@ Valve JJ has flow rate=21; tunnel leads to valve II";
     fn test_get_optimal_total_flow() {
         let valves = parse_valves(SMALL_INPUT).unwrap();
         let start_state = State {
-            at: make_id("AA"),
+            at: 0,
             open: BTreeSet::new(),
         };
         let cache = &mut HashMap::new();
