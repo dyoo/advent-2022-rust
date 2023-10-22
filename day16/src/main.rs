@@ -1,5 +1,5 @@
+use bit_set::BitSet;
 use regex::Regex;
-use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::OnceLock;
@@ -88,7 +88,7 @@ fn normalize_valves(valves: &[Valve]) -> Vec<NormalizedValve> {
         .iter()
         .map(|valve| NormalizedValve {
             id: *mapping.get(valve.id.as_str()).expect("impossible"),
-	    name: valve.id.clone(),
+            name: valve.id.clone(),
             flow_rate: valve.flow_rate,
             exits: valve
                 .exits
@@ -105,7 +105,7 @@ fn normalize_valves(valves: &[Valve]) -> Vec<NormalizedValve> {
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 struct State {
     at: usize,
-    open: BTreeSet<usize>,
+    open: BitSet,
 }
 
 fn parse_valves(s: &str) -> Result<Vec<NormalizedValve>, String> {
@@ -117,8 +117,8 @@ fn parse_valves(s: &str) -> Result<Vec<NormalizedValve>, String> {
         .map_err(|e| e.to_string())
 }
 
-fn get_current_flow(open: &BTreeSet<usize>, valves: &[NormalizedValve]) -> i32 {
-    open.iter().map(|id| valves[*id].flow_rate).sum()
+fn get_current_flow(open: &BitSet, valves: &[NormalizedValve]) -> i32 {
+    open.iter().map(|id| valves[id].flow_rate).sum()
 }
 
 fn get_optimal_total_flow(
@@ -144,7 +144,7 @@ fn get_optimal_total_flow(
 
     let score_after_opening = {
         // Opening the current valve:
-        if !state.open.contains(&current_valve.id) && current_valve.flow_rate > 0 {
+        if !state.open.contains(current_valve.id) && current_valve.flow_rate > 0 {
             let new_state = &State {
                 at: state.at.clone(),
                 open: {
@@ -180,7 +180,7 @@ fn part_1(s: &str) -> i32 {
     let valves = parse_valves(s).unwrap();
     let start_state = State {
         at: 0,
-        open: BTreeSet::new(),
+        open: BitSet::new(),
     };
     let cache = &mut HashMap::new();
     get_optimal_total_flow(&start_state, &valves, 30, cache)
@@ -223,13 +223,13 @@ Valve BB has flow rate=13; tunnels lead to valves AA";
             vec![
                 NormalizedValve {
                     id: 0,
-		    name: "AA".into(),
+                    name: "AA".into(),
                     flow_rate: 0,
                     exits: vec![1],
                 },
                 NormalizedValve {
                     id: 1,
-		    name: "BB".into(),
+                    name: "BB".into(),
                     flow_rate: 13,
                     exits: vec![0],
                 },
@@ -243,7 +243,7 @@ Valve BB has flow rate=13; tunnels lead to valves AA";
 Valve AA has flow rate=5; tunnels lead to valves BB
 Valve BB has flow rate=13; tunnels lead to valves CC";
         let valves = parse_valves(input).unwrap();
-        assert_eq!(get_current_flow(&[].into(), &valves), 0);
+        assert_eq!(get_current_flow(&BitSet::new(), &valves), 0);
     }
 
     #[test]
@@ -252,7 +252,10 @@ Valve BB has flow rate=13; tunnels lead to valves CC";
 Valve AA has flow rate=5; tunnels lead to valves BB
 Valve BB has flow rate=13; tunnels lead to valves CC";
         let valves = parse_valves(input).unwrap();
-        assert_eq!(get_current_flow(&[0].into(), &valves), 5);
+        assert_eq!(
+            get_current_flow(&BitSet::from_bytes(&[0b10000000]), &valves),
+            5
+        );
     }
 
     #[test]
@@ -261,7 +264,8 @@ Valve BB has flow rate=13; tunnels lead to valves CC";
 Valve AA has flow rate=5; tunnels lead to valves BB
 Valve BB has flow rate=13; tunnels lead to valves AA";
         let valves = parse_valves(input).unwrap();
-        assert_eq!(get_current_flow(&[0, 1].into(), &valves), 18);
+        assert_eq!(get_current_flow(&BitSet::from_bytes(&[0b11000000]),
+				    &valves), 18);
     }
 
     const SMALL_INPUT: &str = "\
@@ -281,7 +285,7 @@ Valve JJ has flow rate=21; tunnel leads to valve II";
         let valves = parse_valves(SMALL_INPUT).unwrap();
         let start_state = State {
             at: 0,
-            open: BTreeSet::new(),
+            open: BitSet::new(),
         };
         let cache = &mut HashMap::new();
         assert_eq!(
