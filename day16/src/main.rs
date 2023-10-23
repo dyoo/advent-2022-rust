@@ -56,7 +56,6 @@ impl std::str::FromStr for Valve {
 #[derive(Debug, PartialEq)]
 struct NormalizedValve {
     id: usize,
-    name: String,
     flow_rate: i32,
     exits: Vec<usize>,
 }
@@ -68,16 +67,11 @@ fn normalize_valves(valves: &[Valve]) -> Vec<NormalizedValve> {
 
     // Assign mappings for all ids.
 
-    for id in valves
-        .into_iter()
-        .map(|valve| valve.id.as_str())
-        .into_iter()
-        .chain(
-            valves
-                .into_iter()
-                .flat_map(|valve| valve.exits.iter().map(String::as_str)),
-        )
-    {
+    for id in valves.iter().map(|valve| valve.id.as_str()).chain(
+        valves
+            .iter()
+            .flat_map(|valve| valve.exits.iter().map(String::as_str)),
+    ) {
         if !mapping.contains_key(id) {
             mapping.insert(id, count);
             count += 1;
@@ -88,7 +82,6 @@ fn normalize_valves(valves: &[Valve]) -> Vec<NormalizedValve> {
         .iter()
         .map(|valve| NormalizedValve {
             id: *mapping.get(valve.id.as_str()).expect("impossible"),
-            name: valve.id.clone(),
             flow_rate: valve.flow_rate,
             exits: valve
                 .exits
@@ -146,7 +139,7 @@ fn get_optimal_total_flow(
         // Opening the current valve:
         if !state.open.contains(current_valve.id) && current_valve.flow_rate > 0 {
             let new_state = &State {
-                at: state.at.clone(),
+                at: state.at,
                 open: {
                     let mut new_open = state.open.clone();
                     new_open.insert(current_valve.id);
@@ -186,6 +179,34 @@ fn part_1(s: &str) -> i32 {
     get_optimal_total_flow(&start_state, &valves, 30, cache)
 }
 
+fn all_pairs_shortest(valves: &[NormalizedValve]) -> Vec<Vec<usize>> {
+    let n = valves.len();
+
+    let mut costs = vec![vec![usize::MAX; n]; n];
+    // Initial distances
+    for (i, valve) in valves.iter().enumerate() {
+        for exit in &valve.exits {
+            costs[i][*exit] = 1;
+        }
+    }
+
+    floyd_warshall(costs)
+}
+
+fn floyd_warshall(mut costs: Vec<Vec<usize>>) -> Vec<Vec<usize>> {
+    let n = costs.len();
+    for k in 0..n {
+        for i in 0..n {
+            for j in 0..n {
+                if costs[i][k].saturating_add(costs[k][j]) < costs[i][j] {
+                    costs[i][j] = costs[i][k].saturating_add(costs[k][j])
+                }
+            }
+        }
+    }
+    costs
+}
+
 fn main() {
     let input = std::fs::read_to_string("input.txt").expect("input.txt");
     println!("part 1: {}", part_1(&input));
@@ -223,13 +244,11 @@ Valve BB has flow rate=13; tunnels lead to valves AA";
             vec![
                 NormalizedValve {
                     id: 0,
-                    name: "AA".into(),
                     flow_rate: 0,
                     exits: vec![1],
                 },
                 NormalizedValve {
                     id: 1,
-                    name: "BB".into(),
                     flow_rate: 13,
                     exits: vec![0],
                 },
@@ -264,8 +283,10 @@ Valve BB has flow rate=13; tunnels lead to valves CC";
 Valve AA has flow rate=5; tunnels lead to valves BB
 Valve BB has flow rate=13; tunnels lead to valves AA";
         let valves = parse_valves(input).unwrap();
-        assert_eq!(get_current_flow(&BitSet::from_bytes(&[0b11000000]),
-				    &valves), 18);
+        assert_eq!(
+            get_current_flow(&BitSet::from_bytes(&[0b11000000]), &valves),
+            18
+        );
     }
 
     const SMALL_INPUT: &str = "\
@@ -292,5 +313,17 @@ Valve JJ has flow rate=21; tunnel leads to valve II";
             get_optimal_total_flow(&start_state, &valves, 30, cache),
             1651
         );
+    }
+    #[test]
+    fn test_floyd_warshall() {
+        let inf = usize::MAX;
+
+        //
+        // x <----> y <-----> z
+        //
+        let input = vec![vec![0, 1, inf], vec![1, 0, 1], vec![inf, 1, 0]];
+        let output = floyd_warshall(input);
+
+        assert_eq!(output, vec![vec![0, 1, 2], vec![1, 0, 1], vec![2, 1, 0],]);
     }
 }
