@@ -128,13 +128,18 @@ pub fn find_optimal_total_flow(
         time_left,
         estimated_total_flow: estimated_total_flow_heuristic(&BitSet::new(), time_left, valves),
     });
-    drop(starting_at);
-    drop(time_left);
 
     let mut best_solution_so_far = u32::MIN;
 
     while let Some(state) = state_priority_queue.pop() {
         let current_flow = get_current_flow(&state.open, valves);
+
+        // Update the best solution by pretending we stay where we are
+        // for the remainder of our time.
+        best_solution_so_far = max(
+            best_solution_so_far,
+            state.total_flow + state.time_left * current_flow,
+        );
 
         let PlayerState::At { id: player_at } = state.player_state;
         let distance_to = &distances[player_at];
@@ -145,16 +150,26 @@ pub fn find_optimal_total_flow(
                 .filter(|valve| distance_to[valve.id] < state.time_left)
                 .collect();
 
-        if accessible_closed_valves.is_empty() {
-            best_solution_so_far = max(
-                best_solution_so_far,
-                state.total_flow + state.time_left * current_flow,
-            );
-        }
-
         // Visit a closed valve and open it, adding to priority queue unless
-        // it has no chance of beating.
-        for valve in accessible_closed_valves {}
+        // it has no chance of beating the best so far.
+        for valve in accessible_closed_valves {
+            let player_state = PlayerState::At { id: valve.id };
+            let mut open = state.open.clone();
+            open.insert(valve.id);
+            let total_flow = state.total_flow + distance_to[valve.id] * current_flow;
+            let time_left = state.time_left - distance_to[valve.id] + 1;
+            let estimated_total_flow = estimated_total_flow_heuristic(&open, time_left, valves);
+
+            if estimated_total_flow > best_solution_so_far {
+                state_priority_queue.push(State {
+                    player_state,
+                    open,
+                    total_flow,
+                    time_left,
+                    estimated_total_flow,
+                });
+            }
+        }
     }
 
     best_solution_so_far

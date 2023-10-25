@@ -121,6 +121,11 @@ pub fn part_1(s: &str) -> u32 {
     dynamic_programming::get_optimal_total_flow(&start_state, &valves, 30, cache)
 }
 
+pub fn part_1_with_search(s: &str) -> u32 {
+    let valves = parse_valves(s).unwrap();
+    search::find_optimal_total_flow(0, &valves, 30)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -222,5 +227,11 @@ Valve JJ has flow rate=21; tunnel leads to valve II";
             dynamic_programming::get_optimal_total_flow(&start_state, &valves, 30, cache),
             1651
         );
+    }
+
+    #[test]
+    fn test_get_optimal_total_flow_with_search() {
+        let valves = parse_valves(SMALL_INPUT).unwrap();
+        assert_eq!(search::find_optimal_total_flow(0, &valves, 30), 1651);
     }
 }
