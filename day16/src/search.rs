@@ -43,7 +43,7 @@ pub struct State {
     player_state: PlayerState,
 
     // Set of valves that are currently open.
-    open: BitSet,
+    opened_valves: BitSet,
 
     // Total amount of flow so far.
     total_flow: u32,
@@ -123,7 +123,7 @@ pub fn find_optimal_total_flow(
     let mut state_priority_queue = BinaryHeap::<State>::new();
     state_priority_queue.push(State {
         player_state: PlayerState::At { id: starting_at },
-        open: BitSet::new(),
+        opened_valves: BitSet::new(),
         total_flow: 0,
         time_left,
         estimated_total_flow: estimated_total_flow_heuristic(&BitSet::new(), time_left, valves),
@@ -132,7 +132,7 @@ pub fn find_optimal_total_flow(
     let mut best_solution_so_far = u32::MIN;
 
     while let Some(state) = state_priority_queue.pop() {
-        let current_flow = get_current_flow(&state.open, valves);
+        let current_flow = get_current_flow(&state.opened_valves, valves);
 
         // Update the best solution by pretending we stay where we are
         // for the remainder of our time.
@@ -145,30 +145,37 @@ pub fn find_optimal_total_flow(
         let distance_to = &distances[player_at];
 
         let accessible_closed_valves: Vec<&NormalizedValve> =
-            get_closed_valves(&state.open, valves)
+            get_closed_valves(&state.opened_valves, valves)
                 .into_iter()
                 .filter(|valve| distance_to[valve.id] < state.time_left)
+                .filter(|valve| valve.flow_rate > 0)
                 .collect();
 
         // Visit a closed valve and open it, adding to priority queue unless
         // it has no chance of beating the best so far.
         for valve in accessible_closed_valves {
-            let player_state = PlayerState::At { id: valve.id };
-            let mut open = state.open.clone();
-            open.insert(valve.id);
-            let total_flow = state.total_flow + distance_to[valve.id] * current_flow;
-            let time_left = state.time_left - distance_to[valve.id] + 1;
-            let estimated_total_flow = estimated_total_flow_heuristic(&open, time_left, valves);
+            let new_player_state = PlayerState::At { id: valve.id };
 
-            if estimated_total_flow > best_solution_so_far {
-                state_priority_queue.push(State {
-                    player_state,
-                    open,
-                    total_flow,
-                    time_left,
-                    estimated_total_flow,
-                });
-            }
+            let mut new_opened_valves = state.opened_valves.clone();
+            new_opened_valves.insert(valve.id);
+
+            // Once we move and open, we measure how much flow whas passed
+            let new_time_passed = distance_to[valve.id] + 1;
+            let new_total_flow = state.total_flow + new_time_passed * current_flow;
+            let new_time_left = state.time_left - new_time_passed;
+
+            let estimated_total_flow = new_total_flow
+                + estimated_total_flow_heuristic(&new_opened_valves, new_time_left, valves);
+
+            // if estimated_total_flow > best_solution_so_far {
+            state_priority_queue.push(State {
+                player_state: new_player_state,
+                opened_valves: new_opened_valves,
+                total_flow: new_total_flow,
+                time_left: new_time_left,
+                estimated_total_flow,
+            });
+            // }
         }
     }
 
