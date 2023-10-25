@@ -83,30 +83,25 @@ fn get_closed_valves<'a>(open: &BitSet, valves: &'a [NormalizedValve]) -> Vec<&'
 // in turn, from the largest to the smallest flow.
 fn estimated_total_flow_heuristic(
     open: &BitSet,
-    mut time_left: u32,
+    time_left: u32,
     valves: &[NormalizedValve],
 ) -> u32 {
     let mut total_flow = 0;
-
-    if time_left < 2 {
-        return total_flow;
-    }
 
     let mut closed_valves = get_closed_valves(open, valves);
 
     // Now simulate opening each of the closed valves, one by one, and
     // acumulate flow.
     let mut open = open.clone();
-    while time_left > 0 {
-        // Open the next valve, in descending flow rate.
-        if let Some(valve) = closed_valves.pop() {
-            open.insert(valve.id);
-            time_left -= 1;
-        }
+    for i in 0..time_left {
+        total_flow += get_current_flow(&open, valves);
 
-        if time_left > 0 {
-            total_flow += get_current_flow(&open, valves);
-            time_left -= 1;
+        // Open the next valve, in descending flow rate, every other
+        // tick, pretending that the player can teleport.
+        if i % 2 == 0 {
+            if let Some(valve) = closed_valves.pop() {
+                open.insert(valve.id);
+            }
         }
     }
 
@@ -167,15 +162,15 @@ pub fn find_optimal_total_flow(
             let estimated_total_flow = new_total_flow
                 + estimated_total_flow_heuristic(&new_opened_valves, new_time_left, valves);
 
-            // if estimated_total_flow > best_solution_so_far {
-            state_priority_queue.push(State {
-                player_state: new_player_state,
-                opened_valves: new_opened_valves,
-                total_flow: new_total_flow,
-                time_left: new_time_left,
-                estimated_total_flow,
-            });
-            // }
+            if estimated_total_flow > best_solution_so_far {
+                state_priority_queue.push(State {
+                    player_state: new_player_state,
+                    opened_valves: new_opened_valves,
+                    total_flow: new_total_flow,
+                    time_left: new_time_left,
+                    estimated_total_flow,
+                });
+            }
         }
     }
 
