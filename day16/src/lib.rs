@@ -10,7 +10,7 @@ mod search;
 #[derive(Debug, PartialEq)]
 pub struct Valve {
     pub id: String,
-    pub flow_rate: i32,
+    pub flow_rate: u32,
     pub exits: Vec<String>,
 }
 
@@ -31,11 +31,11 @@ impl std::str::FromStr for Valve {
             .ok_or(format!("Could not parse {:?} as Valve", s))?;
 
         let id = captures.get(1).unwrap().as_str().to_owned();
-        let flow_rate: i32 = captures
+        let flow_rate: u32 = captures
             .get(2)
             .unwrap()
             .as_str()
-            .parse::<i32>()
+            .parse::<u32>()
             .map_err(|_| "Couldn't parse flow rate")?;
         let exits: Vec<String> = captures
             .get(3)
@@ -59,7 +59,7 @@ impl std::str::FromStr for Valve {
 #[derive(Debug, PartialEq)]
 pub struct NormalizedValve {
     pub id: usize,
-    pub flow_rate: i32,
+    pub flow_rate: u32,
     pub exits: Vec<usize>,
 }
 
@@ -107,11 +107,11 @@ fn parse_valves(s: &str) -> Result<Vec<NormalizedValve>, String> {
         .map_err(|e| e.to_string())
 }
 
-fn get_current_flow(open: &BitSet, valves: &[NormalizedValve]) -> i32 {
+fn get_current_flow(open: &BitSet, valves: &[NormalizedValve]) -> u32 {
     open.iter().map(|id| valves[id].flow_rate).sum()
 }
 
-pub fn part_1(s: &str) -> i32 {
+pub fn part_1(s: &str) -> u32 {
     let valves = parse_valves(s).unwrap();
     let start_state = dynamic_programming::State {
         at: 0,

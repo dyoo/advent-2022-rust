@@ -10,8 +10,8 @@ pub fn get_optimal_total_flow(
     state: &State,
     valves: &[NormalizedValve],
     time_left: usize,
-    cache: &mut HashMap<(State, usize), i32>,
-) -> i32 {
+    cache: &mut HashMap<(State, usize), u32>,
+) -> u32 {
     if time_left == 0 {
         return 0;
     }
