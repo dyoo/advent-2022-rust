@@ -40,25 +40,26 @@ pub enum PlayerState {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct State {
+    // What each player is doing.  At the moment, just one player.
     player_state: PlayerState,
 
-    // Set of valves that are currently open.
+    // Set of valves that are open.
     opened_valves: BitSet,
 
     // Total amount of flow so far.
-    total_flow: u32,
-
-    // Estimated total flow.
-    estimated_total_flow: u32,
+    accumulated_flow: u32,
 
     // How much time is left.
     time_left: u32,
+
+    // Estimated total flow once time expires.
+    estimated_total_flow: u32,
 }
 
 impl State {
     fn update_estimated_total_flow(mut self, valves: &[NormalizedValve]) -> Self {
-        self.estimated_total_flow =
-            self.total_flow + estimated_flow_heuristic(&self.opened_valves, self.time_left, valves);
+        self.estimated_total_flow = self.accumulated_flow
+            + estimated_flow_heuristic(&self.opened_valves, self.time_left, valves);
         self
     }
 }
@@ -112,8 +113,7 @@ fn estimated_flow_heuristic(opened: &BitSet, time_left: u32, valves: &[Normalize
             } else {
                 // All valves are open: accelerate the rest of
                 // the calculation.
-                total_flow += current_flow * (time_left - i - 1);
-                break;
+                return total_flow + current_flow * (time_left - i - 1);
             }
         }
     }
@@ -132,7 +132,7 @@ pub fn find_optimal_total_flow(
     state_priority_queue.push(State {
         player_state: PlayerState::At { id: starting_at },
         opened_valves: BitSet::new(),
-        total_flow: 0,
+        accumulated_flow: 0,
         time_left,
         estimated_total_flow: u32::MAX,
     });
@@ -146,7 +146,7 @@ pub fn find_optimal_total_flow(
         // for the remainder of our time.
         best_solution_so_far = max(
             best_solution_so_far,
-            state.total_flow + state.time_left * current_flow,
+            state.accumulated_flow + state.time_left * current_flow,
         );
 
         let PlayerState::At { id: player_at } = state.player_state;
@@ -169,13 +169,13 @@ pub fn find_optimal_total_flow(
 
             // Once we move and open, we measure how much flow has passed
             let new_time_passed = distance_to[valve.id] + 1;
-            let new_total_flow = state.total_flow + new_time_passed * current_flow;
+            let new_total_flow = state.accumulated_flow + new_time_passed * current_flow;
             let new_time_left = state.time_left - new_time_passed;
 
             let new_state = State {
                 player_state: new_player_state,
                 opened_valves: new_opened_valves,
-                total_flow: new_total_flow,
+                accumulated_flow: new_total_flow,
                 time_left: new_time_left,
                 estimated_total_flow: u32::MAX,
             }
