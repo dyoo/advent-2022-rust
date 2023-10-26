@@ -113,12 +113,7 @@ fn get_current_flow(open: &BitSet, valves: &[NormalizedValve]) -> u32 {
 
 pub fn part_1(s: &str) -> u32 {
     let valves = parse_valves(s).unwrap();
-    let start_state = dynamic_programming::State {
-        at: 0,
-        open: BitSet::new(),
-    };
-    let cache = &mut HashMap::new();
-    dynamic_programming::get_optimal_total_flow(&start_state, &valves, 30, cache)
+    dynamic_programming::find_optimal_total_flow(0, &valves, 30)
 }
 
 pub fn part_1_with_search(s: &str) -> u32 {
@@ -218,13 +213,8 @@ Valve JJ has flow rate=21; tunnel leads to valve II";
     #[test]
     fn test_get_optimal_total_flow() {
         let valves = parse_valves(SMALL_INPUT).unwrap();
-        let start_state = dynamic_programming::State {
-            at: 0,
-            open: BitSet::new(),
-        };
-        let cache = &mut HashMap::new();
         assert_eq!(
-            dynamic_programming::get_optimal_total_flow(&start_state, &valves, 30, cache),
+            dynamic_programming::find_optimal_total_flow(0, &valves, 30),
             1651
         );
     }

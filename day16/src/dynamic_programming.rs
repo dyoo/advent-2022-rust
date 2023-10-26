@@ -6,7 +6,20 @@ pub struct State {
     pub open: BitSet,
 }
 
-pub fn get_optimal_total_flow(
+pub fn find_optimal_total_flow(
+    starting_at: usize,
+    valves: &[NormalizedValve],
+    time_left: usize,
+) -> u32 {
+    let start_state = dynamic_programming::State {
+        at: starting_at,
+        open: BitSet::new(),
+    };
+    let cache = &mut HashMap::new();
+    get_optimal_total_flow_internal(&start_state, valves, time_left, cache)
+}
+
+pub fn get_optimal_total_flow_internal(
     state: &State,
     valves: &[NormalizedValve],
     time_left: usize,
@@ -38,7 +51,7 @@ pub fn get_optimal_total_flow(
                     new_open
                 },
             };
-            get_optimal_total_flow(new_state, valves, time_left - 1, cache)
+            get_optimal_total_flow_internal(new_state, valves, time_left - 1, cache)
         } else {
             // If we can't make this move, use zero to skip it
             0
@@ -50,7 +63,7 @@ pub fn get_optimal_total_flow(
             at: *exit,
             open: state.open.clone(),
         };
-        get_optimal_total_flow(&new_state, valves, time_left - 1, cache)
+        get_optimal_total_flow_internal(&new_state, valves, time_left - 1, cache)
     });
 
     let best_result =
