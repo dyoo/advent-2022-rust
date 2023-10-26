@@ -36,6 +36,113 @@ fn floyd_warshall(mut costs: Vec<Vec<u32>>) -> Vec<Vec<u32>> {
 #[derive(Debug, PartialEq, Eq)]
 pub enum PlayerState {
     At { id: usize },
+    Travel { id: usize, time_left: u32 },
+    Open { id: usize, time_left: u32 },
+}
+
+const TIME_TO_OPEN_VALVE: u32 = 1;
+
+// Intended use of PlayerState:
+//
+// * Use tick to find minimum time of stability (for flow accumulation)
+// * Use apply to apply changes the player makes to the state.
+// * Use nexts to find new actions for each player.
+impl PlayerState {
+    fn time_left(&self) -> u32 {
+        match self {
+            PlayerState::At { .. } => 0,
+            PlayerState::Travel { time_left, .. } => *time_left,
+            PlayerState::Open { time_left, .. } => *time_left,
+        }
+    }
+
+    fn destination(&self) -> usize {
+        match self {
+            PlayerState::At { id } => *id,
+            PlayerState::Travel { id, .. } => *id,
+            PlayerState::Open { id, .. } => *id,
+        }
+    }
+
+    fn tick(self, time_passed: u32) -> Self {
+        match self {
+            PlayerState::At { .. } => self,
+            PlayerState::Travel { id, time_left } => PlayerState::Travel {
+                id,
+                time_left: time_left.saturating_sub(time_passed),
+            },
+            PlayerState::Open { id, time_left } => PlayerState::Open {
+                id,
+                time_left: time_left.saturating_sub(time_passed),
+            },
+        }
+    }
+
+    fn apply(self, state: &State) {
+        match self {
+            PlayerState::At { .. } => {}
+            PlayerState::Travel { .. } => {}
+            PlayerState::Open { id, time_left } => {
+                if time_left == 0 {
+                    state.opened_valves.insert(id);
+                }
+            }
+        }
+    }
+
+    // Returns list of new player states.
+    fn nexts(
+        self,
+        state: &State,
+        valves: &[NormalizedValve],
+        distances: &[Vec<u32>],
+    ) -> Vec<PlayerState> {
+        match self {
+            PlayerState::At { id } => {
+                // Schedule a visit to a closed valve that has flow.
+                let distance_to = &distances[id];
+
+                // TODO: switch when player_state becomes player_states.
+                let other_player_destinations = Some(&state.player_state)
+                    .into_iter()
+                    .map(PlayerState::destination)
+                    .collect::<BitSet>();
+
+                let accessible_closed_valves: Vec<&NormalizedValve> =
+                    get_closed_valves(&state.opened_valves, valves)
+                        .into_iter()
+                        .filter(|valve| distance_to[valve.id] < state.time_left)
+                        .filter(|valve| valve.flow_rate > 0)
+                        .filter(|valve| !other_player_destinations.contains(valve.id))
+                        .collect();
+
+                accessible_closed_valves
+                    .into_iter()
+                    .map(|valve| PlayerState::Travel {
+                        id: valve.id,
+                        time_left: distance_to[valve.id],
+                    })
+                    .collect()
+            }
+            PlayerState::Travel { id, time_left } => {
+                if time_left == 0 {
+                    vec![PlayerState::Open {
+                        id,
+                        time_left: TIME_TO_OPEN_VALVE,
+                    }]
+                } else {
+                    vec![self]
+                }
+            }
+            PlayerState::Open { id, time_left } => {
+                if time_left == 0 {
+                    vec![PlayerState::At { id }]
+                } else {
+                    vec![self]
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -61,6 +168,19 @@ impl State {
         self.estimated_total_flow = self.accumulated_flow
             + estimated_flow_heuristic(&self.opened_valves, self.time_left, valves);
         self
+    }
+
+    // Simulate passage of time, returning list of new states afterwards.
+    fn tick(self, valves: &[NormalizedValve]) -> Vec<Self> {
+        // Find how much time has to pass before something interesting
+        // happens.
+        // let time_passing = self.player_state.time_left();
+
+        // let current_flow = get_current_flow(&self.opened, valves);
+
+        // Generate new candidate states.
+
+        vec![self]
     }
 }
 
