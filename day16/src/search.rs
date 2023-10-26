@@ -55,6 +55,14 @@ pub struct State {
     time_left: u32,
 }
 
+impl State {
+    fn update_estimated_total_flow(mut self, valves: &[NormalizedValve]) -> Self {
+        self.estimated_total_flow =
+            self.total_flow + estimated_flow_heuristic(&self.opened_valves, self.time_left, valves);
+        self
+    }
+}
+
 impl std::cmp::Ord for State {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.estimated_total_flow.cmp(&other.estimated_total_flow)
@@ -111,14 +119,6 @@ fn estimated_flow_heuristic(opened: &BitSet, time_left: u32, valves: &[Normalize
     }
 
     total_flow
-}
-
-impl State {
-    fn update_estimated_total_flow(mut self, valves: &[NormalizedValve]) -> Self {
-        self.estimated_total_flow =
-            self.total_flow + estimated_flow_heuristic(&self.opened_valves, self.time_left, valves);
-        self
-    }
 }
 
 pub fn find_optimal_total_flow(
