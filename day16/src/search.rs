@@ -167,16 +167,45 @@ pub struct State {
     estimated_total_flow: u32,
 }
 
-// Expected lifecycle:
+// Expected transitions:
 //
 // tick() ------> apply_player_actions() -----> get_next_states()
-//   ^                                               V
-//   +-----------------------------------------------+
 
 impl State {
+    // Provides a optimistic best-case estimate for maximizing total flow
+    // at the end.  We make the simplifying assumptions that, of the
+    // unopened valves, they are all adjacent, and that we can open each
+    // in turn, from the largest to the smallest flow.
+    fn estimated_flow_heuristic(&self, valves: &[NormalizedValve]) -> u32 {
+        let mut total_flow = 0;
+
+        let mut closed_valves = get_closed_valves(&self.opened_valves, valves);
+
+        // Now simulate opening each of the closed valves, one by one, and
+        // acumulate flow.
+        let mut opened = self.opened_valves.clone();
+        for i in 0..self.time_left {
+            let current_flow = get_current_flow(&opened, valves);
+            total_flow += current_flow;
+
+            // Open the next valve, in descending flow rate, every other
+            // tick, pretending that the player can teleport.
+            if i % 2 == 0 {
+                if let Some(valve) = closed_valves.pop() {
+                    opened.insert(valve.id);
+                } else {
+                    // All valves are open: accelerate the rest of
+                    // the calculation.
+                    return total_flow + current_flow * (self.time_left - i - 1);
+                }
+            }
+        }
+
+        total_flow
+    }
+
     fn update_estimated_total_flow(mut self, valves: &[NormalizedValve]) -> Self {
-        self.estimated_total_flow = self.accumulated_flow
-            + estimated_flow_heuristic(&self.opened_valves, self.time_left, valves);
+        self.estimated_total_flow = self.accumulated_flow + self.estimated_flow_heuristic(valves);
         self
     }
 
@@ -226,6 +255,7 @@ impl State {
     }
 }
 
+// We compare States by estimated_total_flow, to implement A* with a priority queue.
 impl std::cmp::Ord for State {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.estimated_total_flow.cmp(&other.estimated_total_flow)
@@ -249,38 +279,6 @@ fn get_closed_valves<'a>(
         .collect::<Vec<_>>();
     closed_valves.sort_by_key(|v| v.flow_rate);
     closed_valves
-}
-
-// Provides a optimistic best-case estimate for maximizing total flow
-// at the end.  We make the simplifying assumptions that, of the
-// unopened valves, they are all adjacent, and that we can open each
-// in turn, from the largest to the smallest flow.
-fn estimated_flow_heuristic(opened: &BitSet, time_left: u32, valves: &[NormalizedValve]) -> u32 {
-    let mut total_flow = 0;
-
-    let mut closed_valves = get_closed_valves(opened, valves);
-
-    // Now simulate opening each of the closed valves, one by one, and
-    // acumulate flow.
-    let mut opened = opened.clone();
-    for i in 0..time_left {
-        let current_flow = get_current_flow(&opened, valves);
-        total_flow += current_flow;
-
-        // Open the next valve, in descending flow rate, every other
-        // tick, pretending that the player can teleport.
-        if i % 2 == 0 {
-            if let Some(valve) = closed_valves.pop() {
-                opened.insert(valve.id);
-            } else {
-                // All valves are open: accelerate the rest of
-                // the calculation.
-                return total_flow + current_flow * (time_left - i - 1);
-            }
-        }
-    }
-
-    total_flow
 }
 
 pub fn find_optimal_total_flow(
