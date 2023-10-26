@@ -2,7 +2,7 @@
 //
 
 use crate::*;
-use std::cmp::max;
+use std::cmp::{max, min};
 use std::collections::BinaryHeap;
 
 fn all_pairs_shortest(valves: &[NormalizedValve]) -> Vec<Vec<u32>> {
@@ -33,11 +33,11 @@ fn floyd_warshall(mut costs: Vec<Vec<u32>>) -> Vec<Vec<u32>> {
     costs
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PlayerState {
-    At { id: usize },
-    Travel { id: usize, time_left: u32 },
-    Open { id: usize, time_left: u32 },
+    Wait { at: usize, time_left: u32 },
+    Travel { to: usize, time_left: u32 },
+    Open { at: usize, time_left: u32 },
 }
 
 const TIME_TO_OPEN_VALVE: u32 = 1;
@@ -48,9 +48,9 @@ const TIME_TO_OPEN_VALVE: u32 = 1;
 // * Use apply to apply changes the player makes to the state.
 // * Use nexts to find new actions for each player.
 impl PlayerState {
-    fn time_left(&self) -> u32 {
+    fn get_time_till_action(&self) -> u32 {
         match self {
-            PlayerState::At { .. } => 0,
+            PlayerState::Wait { time_left, .. } => *time_left,
             PlayerState::Travel { time_left, .. } => *time_left,
             PlayerState::Open { time_left, .. } => *time_left,
         }
@@ -58,51 +58,43 @@ impl PlayerState {
 
     fn destination(&self) -> usize {
         match self {
-            PlayerState::At { id } => *id,
-            PlayerState::Travel { id, .. } => *id,
-            PlayerState::Open { id, .. } => *id,
+            PlayerState::Wait { at: id, .. } => *id,
+            PlayerState::Travel { to: id, .. } => *id,
+            PlayerState::Open { at: id, .. } => *id,
         }
     }
 
-    fn tick(self, time_passed: u32) -> Self {
+    fn tick(&mut self, time_passed: u32) {
         match self {
-            PlayerState::At { .. } => self,
-            PlayerState::Travel { id, time_left } => PlayerState::Travel {
-                id,
-                time_left: time_left.saturating_sub(time_passed),
-            },
-            PlayerState::Open { id, time_left } => PlayerState::Open {
-                id,
-                time_left: time_left.saturating_sub(time_passed),
-            },
-        }
-    }
-
-    fn apply(self, state: &State) {
-        match self {
-            PlayerState::At { .. } => {}
-            PlayerState::Travel { .. } => {}
-            PlayerState::Open { id, time_left } => {
-                if time_left == 0 {
-                    state.opened_valves.insert(id);
-                }
+            PlayerState::Wait { time_left, .. } => {
+                *time_left = time_left.saturating_sub(time_passed);
+            }
+            PlayerState::Travel { time_left, .. } => {
+                *time_left = time_left.saturating_sub(time_passed);
+            }
+            PlayerState::Open { time_left, .. } => {
+                *time_left = time_left.saturating_sub(time_passed);
             }
         }
     }
 
     // Returns list of new player states.
-    fn nexts(
+    fn get_next_states(
         self,
         state: &State,
         valves: &[NormalizedValve],
         distances: &[Vec<u32>],
     ) -> Vec<PlayerState> {
         match self {
-            PlayerState::At { id } => {
-                // Schedule a visit to a closed valve that has flow.
-                let distance_to = &distances[id];
+            PlayerState::Wait { at, time_left } => {
+                if time_left != 0 {
+                    return vec![self];
+                }
 
-                // TODO: switch when player_state becomes player_states.
+                // Schedule a visit to a closed valve that has flow.
+                let distance_to = &distances[at];
+
+                // TODO: handle multiplayer
                 let other_player_destinations = Some(&state.player_state)
                     .into_iter()
                     .map(PlayerState::destination)
@@ -116,27 +108,39 @@ impl PlayerState {
                         .filter(|valve| !other_player_destinations.contains(valve.id))
                         .collect();
 
-                accessible_closed_valves
+                let results: Vec<PlayerState> = accessible_closed_valves
                     .into_iter()
                     .map(|valve| PlayerState::Travel {
-                        id: valve.id,
+                        to: valve.id,
                         time_left: distance_to[valve.id],
                     })
-                    .collect()
+                    .collect();
+
+                if results.is_empty() {
+                    vec![PlayerState::Wait {
+                        at,
+                        time_left: state.time_left,
+                    }]
+                } else {
+                    results
+                }
             }
-            PlayerState::Travel { id, time_left } => {
+            PlayerState::Travel { to: at, time_left } => {
                 if time_left == 0 {
                     vec![PlayerState::Open {
-                        id,
+                        at,
                         time_left: TIME_TO_OPEN_VALVE,
                     }]
                 } else {
                     vec![self]
                 }
             }
-            PlayerState::Open { id, time_left } => {
+            PlayerState::Open { at, time_left } => {
                 if time_left == 0 {
-                    vec![PlayerState::At { id }]
+                    vec![PlayerState::Wait {
+                        at: at,
+                        time_left: 0,
+                    }]
                 } else {
                     vec![self]
                 }
@@ -145,7 +149,7 @@ impl PlayerState {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct State {
     // What each player is doing.  At the moment, just one player.
     player_state: PlayerState,
@@ -163,6 +167,12 @@ pub struct State {
     estimated_total_flow: u32,
 }
 
+// Expected lifecycle:
+//
+// tick() ------> apply_player_actions() -----> get_next_states()
+//   ^                                               V
+//   +-----------------------------------------------+
+
 impl State {
     fn update_estimated_total_flow(mut self, valves: &[NormalizedValve]) -> Self {
         self.estimated_total_flow = self.accumulated_flow
@@ -170,17 +180,49 @@ impl State {
         self
     }
 
-    // Simulate passage of time, returning list of new states afterwards.
-    fn tick(self, valves: &[NormalizedValve]) -> Vec<Self> {
-        // Find how much time has to pass before something interesting
-        // happens.
-        // let time_passing = self.player_state.time_left();
+    fn get_time_till_action(&self) -> u32 {
+        // TODO: pick maximum of all players
+        self.player_state.get_time_till_action()
+    }
 
-        // let current_flow = get_current_flow(&self.opened, valves);
+    fn tick(&mut self, valves: &[NormalizedValve]) {
+        let time_passed = self.get_time_till_action();
+        let current_flow = get_current_flow(&self.opened_valves, valves);
 
-        // Generate new candidate states.
+        self.accumulated_flow += current_flow * min(time_passed, self.time_left);
+        self.time_left = self.time_left.saturating_sub(time_passed);
 
-        vec![self]
+        // TODO: handle multiplayer.
+        self.player_state.tick(time_passed);
+    }
+
+    fn apply_player_actions(&mut self) {
+        // TODO: handle multiplayer: apply to all players.
+        match &self.player_state {
+            PlayerState::Wait { .. } => {}
+            PlayerState::Travel { .. } => {}
+            PlayerState::Open { at: id, time_left } => {
+                if *time_left == 0 {
+                    self.opened_valves.insert(*id);
+                }
+            }
+        }
+    }
+
+    fn get_next_states(self, valves: &[NormalizedValve], distances: &[Vec<u32>]) -> Vec<State> {
+        // TODO: handle multiplayer: generate cross-product.
+        self.player_state
+            .clone()
+            .get_next_states(&self, valves, distances)
+            .into_iter()
+            .map(|player_state| {
+                State {
+                    player_state,
+                    ..self.clone()
+                }
+                .update_estimated_total_flow(valves)
+            })
+            .collect::<Vec<_>>()
     }
 }
 
@@ -250,7 +292,10 @@ pub fn find_optimal_total_flow(
 
     let mut state_priority_queue = BinaryHeap::<State>::new();
     state_priority_queue.push(State {
-        player_state: PlayerState::At { id: starting_at },
+        player_state: PlayerState::Wait {
+            at: starting_at,
+            time_left: 0,
+        },
         opened_valves: BitSet::new(),
         accumulated_flow: 0,
         time_left,
@@ -260,49 +305,15 @@ pub fn find_optimal_total_flow(
     let mut best_solution_so_far = u32::MIN;
 
     while let Some(state) = state_priority_queue.pop() {
-        let current_flow = get_current_flow(&state.opened_valves, valves);
+        let mut state = state;
 
-        // Update the best solution by pretending we stay where we are
-        // for the remainder of our time.
-        best_solution_so_far = max(
-            best_solution_so_far,
-            state.accumulated_flow + state.time_left * current_flow,
-        );
+        best_solution_so_far = max(best_solution_so_far, state.accumulated_flow);
 
-        let PlayerState::At { id: player_at } = state.player_state;
-        let distance_to = &distances[player_at];
-
-        let accessible_closed_valves: Vec<&NormalizedValve> =
-            get_closed_valves(&state.opened_valves, valves)
-                .into_iter()
-                .filter(|valve| distance_to[valve.id] < state.time_left)
-                .filter(|valve| valve.flow_rate > 0)
-                .collect();
-
-        // Visit a closed valve and open it, adding to priority queue unless
-        // it has no chance of beating the best so far.
-        for valve in accessible_closed_valves {
-            let new_player_state = PlayerState::At { id: valve.id };
-
-            let mut new_opened_valves = state.opened_valves.clone();
-            new_opened_valves.insert(valve.id);
-
-            // Once we move and open, we measure how much flow has passed
-            let new_time_passed = distance_to[valve.id] + 1;
-            let new_total_flow = state.accumulated_flow + new_time_passed * current_flow;
-            let new_time_left = state.time_left - new_time_passed;
-
-            let new_state = State {
-                player_state: new_player_state,
-                opened_valves: new_opened_valves,
-                accumulated_flow: new_total_flow,
-                time_left: new_time_left,
-                estimated_total_flow: u32::MAX,
-            }
-            .update_estimated_total_flow(valves);
-
-            if new_state.estimated_total_flow > best_solution_so_far {
-                state_priority_queue.push(new_state);
+        state.tick(valves);
+        state.apply_player_actions();
+        for state in state.get_next_states(valves, &distances) {
+            if state.estimated_total_flow > best_solution_so_far {
+                state_priority_queue.push(state);
             }
         }
     }
