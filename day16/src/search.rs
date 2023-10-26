@@ -68,10 +68,13 @@ impl std::cmp::PartialOrd for State {
 }
 
 // Returns list of closed valves.
-fn get_closed_valves<'a>(open: &BitSet, valves: &'a [NormalizedValve]) -> Vec<&'a NormalizedValve> {
+fn get_closed_valves<'a>(
+    opened: &BitSet,
+    valves: &'a [NormalizedValve],
+) -> Vec<&'a NormalizedValve> {
     let mut closed_valves = valves
         .iter()
-        .filter(|v| !open.contains(v.id))
+        .filter(|v| !opened.contains(v.id))
         .collect::<Vec<_>>();
     closed_valves.sort_by_key(|v| v.flow_rate);
     closed_valves
@@ -81,31 +84,41 @@ fn get_closed_valves<'a>(open: &BitSet, valves: &'a [NormalizedValve]) -> Vec<&'
 // at the end.  We make the simplifying assumptions that, of the
 // unopened valves, they are all adjacent, and that we can open each
 // in turn, from the largest to the smallest flow.
-fn estimated_total_flow_heuristic(
-    open: &BitSet,
-    time_left: u32,
-    valves: &[NormalizedValve],
-) -> u32 {
+fn estimated_flow_heuristic(opened: &BitSet, time_left: u32, valves: &[NormalizedValve]) -> u32 {
     let mut total_flow = 0;
 
-    let mut closed_valves = get_closed_valves(open, valves);
+    let mut closed_valves = get_closed_valves(opened, valves);
 
     // Now simulate opening each of the closed valves, one by one, and
     // acumulate flow.
-    let mut open = open.clone();
+    let mut opened = opened.clone();
     for i in 0..time_left {
-        total_flow += get_current_flow(&open, valves);
+        let current_flow = get_current_flow(&opened, valves);
+        total_flow += current_flow;
 
         // Open the next valve, in descending flow rate, every other
         // tick, pretending that the player can teleport.
         if i % 2 == 0 {
             if let Some(valve) = closed_valves.pop() {
-                open.insert(valve.id);
+                opened.insert(valve.id);
+            } else {
+                // All valves are open: accelerate the rest of
+                // the calculation.
+                total_flow += current_flow * (time_left - i - 1);
+                break;
             }
         }
     }
 
     total_flow
+}
+
+impl State {
+    fn update_estimated_total_flow(mut self, valves: &[NormalizedValve]) -> Self {
+        self.estimated_total_flow =
+            self.total_flow + estimated_flow_heuristic(&self.opened_valves, self.time_left, valves);
+        self
+    }
 }
 
 pub fn find_optimal_total_flow(
@@ -121,7 +134,7 @@ pub fn find_optimal_total_flow(
         opened_valves: BitSet::new(),
         total_flow: 0,
         time_left,
-        estimated_total_flow: estimated_total_flow_heuristic(&BitSet::new(), time_left, valves),
+        estimated_total_flow: u32::MAX,
     });
 
     let mut best_solution_so_far = u32::MIN;
@@ -154,22 +167,22 @@ pub fn find_optimal_total_flow(
             let mut new_opened_valves = state.opened_valves.clone();
             new_opened_valves.insert(valve.id);
 
-            // Once we move and open, we measure how much flow whas passed
+            // Once we move and open, we measure how much flow has passed
             let new_time_passed = distance_to[valve.id] + 1;
             let new_total_flow = state.total_flow + new_time_passed * current_flow;
             let new_time_left = state.time_left - new_time_passed;
 
-            let estimated_total_flow = new_total_flow
-                + estimated_total_flow_heuristic(&new_opened_valves, new_time_left, valves);
+            let new_state = State {
+                player_state: new_player_state,
+                opened_valves: new_opened_valves,
+                total_flow: new_total_flow,
+                time_left: new_time_left,
+                estimated_total_flow: u32::MAX,
+            }
+            .update_estimated_total_flow(valves);
 
-            if estimated_total_flow > best_solution_so_far {
-                state_priority_queue.push(State {
-                    player_state: new_player_state,
-                    opened_valves: new_opened_valves,
-                    total_flow: new_total_flow,
-                    time_left: new_time_left,
-                    estimated_total_flow,
-                });
+            if new_state.estimated_total_flow > best_solution_so_far {
+                state_priority_queue.push(new_state);
             }
         }
     }
