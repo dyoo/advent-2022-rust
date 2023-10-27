@@ -80,23 +80,24 @@ impl PlayerState {
 
     // Returns list of new player states.
     fn get_next_states(
-        self,
+        &self,
         state: &State,
         valves: &[NormalizedValve],
         distances: &[Vec<u32>],
     ) -> Vec<PlayerState> {
         match self {
-            PlayerState::Wait { at, time_left } => {
+            &PlayerState::Wait { at, time_left } => {
                 if time_left != 0 {
-                    return vec![self];
+                    return vec![self.clone()];
                 }
 
                 // Schedule a visit to a closed valve that has flow.
                 let distance_to = &distances[at];
 
                 // TODO: handle multiplayer
-                let other_player_destinations = Some(&state.player_state)
-                    .into_iter()
+                let other_player_destinations = state
+                    .player_states
+                    .iter()
                     .map(PlayerState::destination)
                     .collect::<BitSet>();
 
@@ -130,24 +131,24 @@ impl PlayerState {
                     results
                 }
             }
-            PlayerState::Travel { to: at, time_left } => {
+            &PlayerState::Travel { to: at, time_left } => {
                 if time_left == 0 {
                     vec![PlayerState::Open {
                         at,
                         time_left: TIME_TO_OPEN_VALVE,
                     }]
                 } else {
-                    vec![self]
+                    vec![self.clone()]
                 }
             }
-            PlayerState::Open { at, time_left } => {
+            &PlayerState::Open { at, time_left } => {
                 if time_left == 0 {
                     vec![PlayerState::Wait {
                         at: at,
                         time_left: 0,
                     }]
                 } else {
-                    vec![self]
+                    vec![self.clone()]
                 }
             }
         }
@@ -157,7 +158,7 @@ impl PlayerState {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct State {
     // What each player is doing.  At the moment, just one player.
-    player_state: PlayerState,
+    player_states: Vec<PlayerState>,
 
     // Set of valves that are open.
     opened_valves: BitSet,
@@ -223,8 +224,11 @@ impl State {
     }
 
     fn get_time_till_action(&self) -> u32 {
-        // TODO: pick maximum of all players
-        self.player_state.get_time_till_action()
+        self.player_states
+            .iter()
+            .map(PlayerState::get_time_till_action)
+            .min()
+            .unwrap_or(0)
     }
 
     fn tick(&mut self, valves: &[NormalizedValve]) {
@@ -235,37 +239,50 @@ impl State {
         self.time_left = self.time_left.saturating_sub(time_passed);
 
         // TODO: handle multiplayer.
-        self.player_state.tick(time_passed);
+        for player_state in &mut self.player_states {
+            player_state.tick(time_passed);
+        }
     }
 
     fn apply_player_actions(&mut self) {
-        // TODO: handle multiplayer: apply to all players.
-        match &self.player_state {
-            PlayerState::Wait { .. } => {}
-            PlayerState::Travel { .. } => {}
-            PlayerState::Open { at: id, time_left } => {
-                if *time_left == 0 {
-                    self.opened_valves.insert(*id);
-                    self.closed_valves.remove(*id);
+        for player_state in &self.player_states {
+            match player_state {
+                PlayerState::Wait { .. } => {}
+                PlayerState::Travel { .. } => {}
+                PlayerState::Open { at: id, time_left } => {
+                    if *time_left == 0 {
+                        self.opened_valves.insert(*id);
+                        self.closed_valves.remove(*id);
+                    }
                 }
             }
         }
     }
 
-    fn get_next_states(self, valves: &[NormalizedValve], distances: &[Vec<u32>]) -> Vec<State> {
-        // TODO: handle multiplayer: generate cross-product.
-        self.player_state
-            .clone()
-            .get_next_states(&self, valves, distances)
-            .into_iter()
-            .map(|player_state| {
-                State {
-                    player_state,
-                    ..self.clone()
+    fn get_next_states(&self, valves: &[NormalizedValve], distances: &[Vec<u32>]) -> Vec<State> {
+        let mut states = vec![State {
+            player_states: vec![],
+            ..self.clone()
+        }];
+
+        // Applies cross-product to account for the simulaneous actions of all players.
+        for player_state in &self.player_states {
+            let mut new_states = Vec::new();
+            for next_player_state in player_state.get_next_states(self, valves, distances) {
+                for state in &states {
+                    let mut new_state = state.clone();
+                    new_state.player_states.push(next_player_state.clone());
+                    new_states.push(new_state)
                 }
-                .update_estimated_total_flow(valves)
-            })
-            .collect::<Vec<_>>()
+            }
+            states = new_states;
+        }
+
+        // Return list of states with updated estimates.
+        states
+            .into_iter()
+            .map(|state| state.update_estimated_total_flow(valves))
+            .collect()
     }
 }
 
@@ -291,10 +308,10 @@ pub fn find_optimal_total_flow(
 
     let mut state_priority_queue = BinaryHeap::<State>::new();
     state_priority_queue.push(State {
-        player_state: PlayerState::Wait {
+        player_states: vec![PlayerState::Wait {
             at: starting_at,
             time_left: 0,
-        },
+        }],
         opened_valves: BitSet::new(),
         closed_valves: {
             let mut result = BitSet::new();
