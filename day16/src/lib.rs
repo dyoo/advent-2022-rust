@@ -229,4 +229,9 @@ Valve JJ has flow rate=21; tunnel leads to valve II";
         let valves = parse_valves(SMALL_INPUT).unwrap();
         assert_eq!(search::find_optimal_total_flow(&[0], &valves, 30), 1651);
     }
+
+    #[test]
+    fn test_part_2() {
+        assert_eq!(part_2_with_search(SMALL_INPUT), 1707);
+    }
 }
