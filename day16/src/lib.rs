@@ -118,7 +118,12 @@ pub fn part_1(s: &str) -> u32 {
 
 pub fn part_1_with_search(s: &str) -> u32 {
     let valves = parse_valves(s).unwrap();
-    search::find_optimal_total_flow(0, &valves, 30)
+    search::find_optimal_total_flow(&[0], &valves, 30)
+}
+
+pub fn part_2_with_search(s: &str) -> u32 {
+    let valves = parse_valves(s).unwrap();
+    search::find_optimal_total_flow(&[0, 0], &valves, 26)
 }
 
 #[cfg(test)]
@@ -222,6 +227,6 @@ Valve JJ has flow rate=21; tunnel leads to valve II";
     #[test]
     fn test_get_optimal_total_flow_with_search() {
         let valves = parse_valves(SMALL_INPUT).unwrap();
-        assert_eq!(search::find_optimal_total_flow(0, &valves, 30), 1651);
+        assert_eq!(search::find_optimal_total_flow(&[0], &valves, 30), 1651);
     }
 }

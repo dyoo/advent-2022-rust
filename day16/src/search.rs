@@ -203,14 +203,16 @@ impl State {
             total_flow += current_flow;
 
             // Open the next valve, in descending flow rate, every other
-            // tick, pretending that the player can teleport.
+            // tick, pretending that the players can teleport.
             if i % 2 == 0 {
-                if let Some(valve) = closed_valves_sorted.pop() {
-                    opened.insert(valve.id);
-                } else {
-                    // All valves are open: accelerate the rest of
-                    // the calculation.
-                    return total_flow + current_flow * (self.time_left - i - 1);
+                for _ in 0..self.player_states.len() {
+                    if let Some(valve) = closed_valves_sorted.pop() {
+                        opened.insert(valve.id);
+                    } else {
+                        // All valves are open: accelerate the rest of
+                        // the calculation.
+                        return total_flow + current_flow * (self.time_left - i - 1);
+                    }
                 }
             }
         }
@@ -300,7 +302,7 @@ impl std::cmp::PartialOrd for State {
 }
 
 pub fn find_optimal_total_flow(
-    starting_at: usize,
+    starting_ats: &[usize],
     valves: &[NormalizedValve],
     time_left: u32,
 ) -> u32 {
@@ -308,10 +310,10 @@ pub fn find_optimal_total_flow(
 
     let mut state_priority_queue = BinaryHeap::<State>::new();
     state_priority_queue.push(State {
-        player_states: vec![PlayerState::Wait {
-            at: starting_at,
-            time_left: 0,
-        }],
+        player_states: starting_ats
+            .iter()
+            .map(|&at| PlayerState::Wait { at, time_left: 0 })
+            .collect(),
         opened_valves: BitSet::new(),
         closed_valves: {
             let mut result = BitSet::new();
