@@ -100,13 +100,14 @@ impl PlayerState {
                     .map(PlayerState::destination)
                     .collect::<BitSet>();
 
-                let accessible_closed_valves: Vec<&NormalizedValve> =
-                    get_closed_valves(&state.opened_valves, valves)
-                        .into_iter()
-                        .filter(|valve| distance_to[valve.id] < state.time_left)
-                        .filter(|valve| valve.flow_rate > 0)
-                        .filter(|valve| !other_player_destinations.contains(valve.id))
-                        .collect();
+                let accessible_closed_valves: Vec<&NormalizedValve> = state
+                    .closed_valves
+                    .iter()
+                    .map(|valve_id| &valves[valve_id])
+                    .filter(|valve| distance_to[valve.id] < state.time_left)
+                    .filter(|valve| valve.flow_rate > 0)
+                    .filter(|valve| !other_player_destinations.contains(valve.id))
+                    .collect();
 
                 let results: Vec<PlayerState> = accessible_closed_valves
                     .into_iter()
@@ -117,10 +118,14 @@ impl PlayerState {
                     .collect();
 
                 if results.is_empty() {
-                    vec![PlayerState::Wait {
-                        at,
-                        time_left: state.time_left,
-                    }]
+                    if state.time_left == 0 {
+                        vec![]
+                    } else {
+                        vec![PlayerState::Wait {
+                            at,
+                            time_left: state.time_left,
+                        }]
+                    }
                 } else {
                     results
                 }
@@ -157,6 +162,9 @@ pub struct State {
     // Set of valves that are open.
     opened_valves: BitSet,
 
+    // Set of valves that are closed.
+    closed_valves: BitSet,
+
     // Total amount of flow so far.
     accumulated_flow: u32,
 
@@ -179,7 +187,7 @@ impl State {
     fn estimated_flow_heuristic(&self, valves: &[NormalizedValve]) -> u32 {
         let mut total_flow = 0;
 
-        let mut closed_valves = get_closed_valves(&self.opened_valves, valves);
+        let mut closed_valves = self.closed_valves.iter();
 
         // Now simulate opening each of the closed valves, one by one, and
         // acumulate flow.
@@ -191,8 +199,8 @@ impl State {
             // Open the next valve, in descending flow rate, every other
             // tick, pretending that the player can teleport.
             if i % 2 == 0 {
-                if let Some(valve) = closed_valves.pop() {
-                    opened.insert(valve.id);
+                if let Some(valve_id) = closed_valves.next() {
+                    opened.insert(valve_id);
                 } else {
                     // All valves are open: accelerate the rest of
                     // the calculation.
@@ -233,6 +241,7 @@ impl State {
             PlayerState::Open { at: id, time_left } => {
                 if *time_left == 0 {
                     self.opened_valves.insert(*id);
+                    self.closed_valves.remove(*id);
                 }
             }
         }
@@ -268,19 +277,6 @@ impl std::cmp::PartialOrd for State {
     }
 }
 
-// Returns list of closed valves.
-fn get_closed_valves<'a>(
-    opened: &BitSet,
-    valves: &'a [NormalizedValve],
-) -> Vec<&'a NormalizedValve> {
-    let mut closed_valves = valves
-        .iter()
-        .filter(|v| !opened.contains(v.id))
-        .collect::<Vec<_>>();
-    closed_valves.sort_by_key(|v| v.flow_rate);
-    closed_valves
-}
-
 pub fn find_optimal_total_flow(
     starting_at: usize,
     valves: &[NormalizedValve],
@@ -295,6 +291,13 @@ pub fn find_optimal_total_flow(
             time_left: 0,
         },
         opened_valves: BitSet::new(),
+        closed_valves: {
+            let mut result = BitSet::new();
+            for i in 0..valves.len() {
+                result.insert(i);
+            }
+            result
+        },
         accumulated_flow: 0,
         time_left,
         estimated_total_flow: u32::MAX,
@@ -305,9 +308,9 @@ pub fn find_optimal_total_flow(
     while let Some(state) = state_priority_queue.pop() {
         let mut state = state;
 
+        state.tick(valves);
         best_solution_so_far = max(best_solution_so_far, state.accumulated_flow);
 
-        state.tick(valves);
         state.apply_player_actions();
         for state in state.get_next_states(valves, &distances) {
             if state.estimated_total_flow > best_solution_so_far {
