@@ -187,7 +187,12 @@ impl State {
     fn estimated_flow_heuristic(&self, valves: &[NormalizedValve]) -> u32 {
         let mut total_flow = 0;
 
-        let mut closed_valves = self.closed_valves.iter();
+        let mut closed_valves_sorted = self
+            .closed_valves
+            .iter()
+            .map(|id| &valves[id])
+            .collect::<Vec<&NormalizedValve>>();
+        closed_valves_sorted.sort_by_key(|v| v.flow_rate);
 
         // Now simulate opening each of the closed valves, one by one, and
         // acumulate flow.
@@ -199,8 +204,8 @@ impl State {
             // Open the next valve, in descending flow rate, every other
             // tick, pretending that the player can teleport.
             if i % 2 == 0 {
-                if let Some(valve_id) = closed_valves.next() {
-                    opened.insert(valve_id);
+                if let Some(valve) = closed_valves_sorted.pop() {
+                    opened.insert(valve.id);
                 } else {
                     // All valves are open: accelerate the rest of
                     // the calculation.
