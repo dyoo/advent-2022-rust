@@ -132,7 +132,38 @@ fn is_colliding(piece: &Piece, stage: &Stage) -> bool {
 }
 
 fn place_initial(p: &Piece, stage: &Stage) -> Piece {
-    p.shift(2, stage.top_y + 3)
+    p.shift(2, stage.top_y + 4)
+}
+
+#[test]
+fn test_place_initial_empty() {
+    let p = place_initial(&horiz(), &Stage::new());
+    assert_eq!(
+        p.pos,
+        vec![
+            Pos::new(2, 3),
+            Pos::new(3, 3),
+            Pos::new(4, 3),
+            Pos::new(5, 3)
+        ]
+    );
+}
+
+#[test]
+fn test_place_initial_after_horiz_on_floor() {
+    let mut stage = Stage::new();
+    stage.add(&horiz());
+    let p = place_initial(&plus(), &stage);
+    assert_eq!(
+        p.pos,
+        vec![
+            Pos::new(3, 4),
+            Pos::new(2, 5),
+            Pos::new(3, 5),
+            Pos::new(4, 5),
+            Pos::new(3, 6),
+        ]
+    );
 }
 
 fn part_1(input: &str) {
