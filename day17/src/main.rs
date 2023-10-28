@@ -41,7 +41,7 @@ impl Piece {
     }
 
     fn down(&self) -> Self {
-        self.shift(0, 1)
+        self.shift(0, -1)
     }
 }
 
@@ -135,64 +135,118 @@ fn place_initial(p: &Piece, stage: &Stage) -> Piece {
     p.shift(2, stage.top_y + 4)
 }
 
-#[test]
-fn test_place_initial_empty() {
-    let p = place_initial(&horiz(), &Stage::new());
-    assert_eq!(
-        p.pos,
-        vec![
-            Pos::new(2, 3),
-            Pos::new(3, 3),
-            Pos::new(4, 3),
-            Pos::new(5, 3)
-        ]
-    );
-}
-
-#[test]
-fn test_place_initial_after_horiz_on_floor() {
-    let mut stage = Stage::new();
-    stage.add(&horiz());
-    let p = place_initial(&plus(), &stage);
-    assert_eq!(
-        p.pos,
-        vec![
-            Pos::new(3, 4),
-            Pos::new(2, 5),
-            Pos::new(3, 5),
-            Pos::new(4, 5),
-            Pos::new(3, 6),
-        ]
-    );
-}
-
-fn part_1(input: &str) {
+fn part_1(jet_pattern_input: &str) -> i32 {
     // pieces will rotate among the following:
-    let pieces = [horiz(), plus(), corner(), vertical(), square()]
+    let mut pieces = [horiz(), plus(), corner(), vertical(), square()]
         .into_iter()
-        .cycle();
+        .cycle()
+        .into_iter();
 
     // the instructions, similarly, will rotate:
-    let repeating_instructions = input.trim().chars().cycle();
+    let mut jets = jet_pattern_input.trim().chars().cycle().into_iter();
 
-    let mut state = Stage::new();
+    let mut stage = Stage::new();
 
-    for instruction in repeating_instructions.clone().take(10) {
-        dbg![instruction];
+    let mut count = 0;
+    let mut piece = place_initial(&pieces.next().unwrap(), &stage);
+
+    loop {
+        // Handle jet movement.
+        let jet = jets.next().unwrap();
+        let mut blown = piece.clone();
+        if jet == '<' {
+            blown = blown.left();
+        } else if jet == '>' {
+            blown = blown.right();
+        }
+        if !is_colliding(&blown, &stage) {
+            piece = blown;
+        }
+
+        // Handle falling.
+        let fallen = piece.clone().down();
+        if is_colliding(&fallen, &stage) {
+            stage.add(&piece);
+            count += 1;
+
+            piece = place_initial(&pieces.next().unwrap(), &stage);
+        } else {
+            piece = fallen;
+        }
+
+        if count >= 2022 {
+            break;
+        }
     }
 
-    for piece in pieces.clone().take(2) {
-        println!("{:?}", piece.shift(2, 3));
-    }
-
-    for piece in pieces.take(2) {
-        println!("{:?}", piece.shift(2, 3));
-    }
+    stage.top_y + 1
 }
 
 fn main() {
     // the instructions, similarly, will rotate:
     let input = std::fs::read_to_string("input.txt").expect("file");
 
-    part_1(&input);
+    println!("{}", part_1(&input));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_place_initial_empty() {
+        let p = place_initial(&horiz(), &Stage::new());
+        assert_eq!(
+            p.pos,
+            vec![
+                Pos::new(2, 3),
+                Pos::new(3, 3),
+                Pos::new(4, 3),
+                Pos::new(5, 3)
+            ]
+        );
+    }
+
+    #[test]
+    fn test_place_initial_after_horiz_on_floor() {
+        let mut stage = Stage::new();
+        stage.add(&horiz());
+        let p = place_initial(&plus(), &stage);
+        assert_eq!(
+            p.pos,
+            vec![
+                Pos::new(3, 4),
+                Pos::new(2, 5),
+                Pos::new(3, 5),
+                Pos::new(4, 5),
+                Pos::new(3, 6),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_is_colliding() {
+        let stage = Stage::new();
+
+        let piece = horiz();
+        assert!(!is_colliding(&piece, &stage));
+
+        let piece = horiz().down();
+        assert!(is_colliding(&piece, &stage));
+
+        let piece = horiz().shift(3, 0);
+        assert!(!is_colliding(&piece, &stage));
+
+        let piece = horiz().shift(4, 0);
+        assert!(is_colliding(&piece, &stage));
+
+        let piece = horiz().shift(-1, 0);
+        assert!(is_colliding(&piece, &stage));
+    }
+
+    #[test]
+    fn test_part_1() {
+        let input = ">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>";
+        assert_eq!(part_1(input), 3068);
+    }
 }
