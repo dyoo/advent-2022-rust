@@ -46,11 +46,11 @@ fn horiz() -> Piece {
 fn plus() -> Piece {
     Piece {
         pos: vec![
-            Pos { x: 1, y: 0 },
-            Pos { x: 0, y: 1 },
-            Pos { x: 1, y: 1 },
-            Pos { x: 2, y: 1 },
-            Pos { x: 1, y: 2 },
+            Pos::new(1, 0),
+            Pos::new(0, 1),
+            Pos::new(1, 1),
+            Pos::new(2, 1),
+            Pos::new(1, 2),
         ],
     }
 }
@@ -58,21 +58,21 @@ fn plus() -> Piece {
 fn corner() -> Piece {
     Piece {
         pos: vec![
-            Pos { x: 0, y: 0 },
-            Pos { x: 1, y: 0 },
-            Pos { x: 2, y: 0 },
-            Pos { x: 2, y: 1 },
-            Pos { x: 2, y: 2 },
+            Pos::new(0, 0),
+            Pos::new(1, 0),
+            Pos::new(2, 0),
+            Pos::new(2, 1),
+            Pos::new(2, 2),
         ],
     }
 }
 fn vertical() -> Piece {
     Piece {
         pos: vec![
-            Pos { x: 0, y: 0 },
-            Pos { x: 0, y: 1 },
-            Pos { x: 0, y: 2 },
-            Pos { x: 0, y: 3 },
+            Pos::new(0, 0),
+            Pos::new(0, 1),
+            Pos::new(0, 2),
+            Pos::new(0, 3),
         ],
     }
 }
