@@ -4,15 +4,15 @@ use std::collections::HashSet;
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 struct Pos {
     x: i32,
-    y: i32,
+    y: i64,
 }
 
 impl Pos {
-    fn new(x: i32, y: i32) -> Self {
+    fn new(x: i32, y: i64) -> Self {
         Self { x, y }
     }
 
-    fn shift(self, x: i32, y: i32) -> Self {
+    fn shift(self, x: i32, y: i64) -> Self {
         Self {
             x: self.x + x,
             y: self.y + y,
@@ -26,7 +26,7 @@ struct Piece {
 }
 
 impl Piece {
-    fn shift(&self, x: i32, y: i32) -> Self {
+    fn shift(&self, x: i32, y: i64) -> Self {
         Piece {
             pos: self.pos.iter().copied().map(|p| p.shift(x, y)).collect(),
         }
@@ -106,7 +106,7 @@ struct Stage {
     filled: HashSet<Pos>,
 
     // the highest y that has a filled piece.  -1 at the very beginning which simulates the floor.
-    top_y: i32,
+    top_y: i64,
 }
 
 impl Stage {
@@ -135,7 +135,7 @@ fn place_initial(p: &Piece, stage: &Stage) -> Piece {
     p.shift(2, stage.top_y + 4)
 }
 
-fn part_1(jet_pattern_input: &str) -> i32 {
+fn height_after_blocks_fall(jet_pattern_input: &str, max_stones: i64) -> i64 {
     // pieces will rotate among the following:
     let mut pieces = [horiz(), plus(), corner(), vertical(), square()]
         .into_iter()
@@ -174,7 +174,7 @@ fn part_1(jet_pattern_input: &str) -> i32 {
             piece = fallen;
         }
 
-        if count >= 2022 {
+        if count >= max_stones {
             break;
         }
     }
@@ -186,7 +186,7 @@ fn main() {
     // the instructions, similarly, will rotate:
     let input = std::fs::read_to_string("input.txt").expect("file");
 
-    println!("{}", part_1(&input));
+    println!("part 1: {}", height_after_blocks_fall(&input, 2022));
 }
 
 #[cfg(test)]
@@ -247,6 +247,15 @@ mod tests {
     #[test]
     fn test_part_1() {
         let input = ">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>";
-        assert_eq!(part_1(input), 3068);
+        assert_eq!(height_after_blocks_fall(input, 2022), 3068);
+    }
+
+    #[test]
+    fn test_part_2() {
+        let input = ">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>";
+        assert_eq!(
+            height_after_blocks_fall(input, 1000000000000),
+            1514285714288
+        );
     }
 }
