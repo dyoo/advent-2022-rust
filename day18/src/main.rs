@@ -42,19 +42,17 @@ fn surface_area_1(cubes: &[Pos]) -> usize {
 fn surface_area_2(cubes: &[Pos]) -> usize {
     let cubes_set = cubes.iter().copied().collect::<HashSet<Pos>>();
 
+    let mut boundary_searcher = FloodingBoundarySearch::new(&cubes_set);
+
     // The number of exposed faces are those that are facing empty space
     // * not occupied by an existing cube
     // * can reach the outside.
-    let candidate_faces = cubes
+    cubes
         .iter()
         .flat_map(Pos::faces)
-        .filter(|c| !cubes_set.contains(c));
-
-    // We need to check each face whether it can reach the outside.
-    // We can use DFS, using faces as our neighbor function, till we either
-    // reach a boundary (min-1, max+1 for any coordinate) or we exhaust.
-
-    0
+        .filter(|c| !cubes_set.contains(c))
+        .filter(|c| boundary_searcher.can_reach_outside(*c))
+        .count()
 }
 
 struct FloodingBoundarySearch<'a> {
@@ -68,16 +66,16 @@ struct FloodingBoundarySearch<'a> {
 impl<'a> FloodingBoundarySearch<'a> {
     fn new(cubes: &'a HashSet<Pos>) -> Self {
         let x_bounds = (
-            cubes.iter().map(|c| c.x).min().unwrap() - 1,
-            cubes.iter().map(|c| c.x).max().unwrap() - 1,
+            cubes.iter().map(|c| c.x).min().unwrap(),
+            cubes.iter().map(|c| c.x).max().unwrap(),
         );
         let y_bounds = (
-            cubes.iter().map(|c| c.y).min().unwrap() - 1,
-            cubes.iter().map(|c| c.y).max().unwrap() - 1,
+            cubes.iter().map(|c| c.y).min().unwrap(),
+            cubes.iter().map(|c| c.y).max().unwrap(),
         );
         let z_bounds = (
-            cubes.iter().map(|c| c.z).min().unwrap() - 1,
-            cubes.iter().map(|c| c.z).max().unwrap() - 1,
+            cubes.iter().map(|c| c.z).min().unwrap(),
+            cubes.iter().map(|c| c.z).max().unwrap(),
         );
         Self {
             cubes,
@@ -86,6 +84,51 @@ impl<'a> FloodingBoundarySearch<'a> {
             y_bounds,
             z_bounds,
         }
+    }
+
+    fn can_reach_outside(&mut self, pos: Pos) -> bool {
+        let mut visited = HashSet::new();
+        let result = self.search_internal(pos, &mut visited);
+        for pos in visited {
+            self.cache.insert(pos, result);
+        }
+        result
+    }
+
+    fn search_internal(&mut self, pos: Pos, visited: &mut HashSet<Pos>) -> bool {
+        visited.insert(pos);
+
+        // Check the cache
+        if let Some(answer) = self.cache.get(&pos) {
+            return *answer;
+        }
+
+        // Check the boundaries
+        if pos.x < self.x_bounds.0
+            || pos.x > self.x_bounds.1
+            || pos.y < self.y_bounds.0
+            || pos.y > self.y_bounds.1
+            || pos.z < self.z_bounds.0
+            || pos.z > self.z_bounds.1
+        {
+            return true;
+        }
+
+        // Finally, check our neighbors (filtering folks we've visited)
+        for neighbor in pos
+            .faces()
+            .into_iter()
+            .filter(|c| !self.cubes.contains(c))
+            .filter(|p| !visited.contains(p))
+            .collect::<Vec<Pos>>()
+        {
+            if self.search_internal(neighbor, visited) {
+                return true;
+            }
+        }
+
+        // If we exhaust all possibilities, return false.
+        false
     }
 }
 
@@ -102,6 +145,7 @@ fn parse(s: &str) -> Vec<Pos> {
 fn main() {
     let input = std::fs::read_to_string("input.txt").unwrap();
     println!("part 1: {}", surface_area_1(&parse(&input)));
+    println!("part 2: {}", surface_area_2(&parse(&input)));
 }
 
 #[cfg(test)]
@@ -156,8 +200,14 @@ mod tests {
     }
 
     #[test]
-    fn surface_area_small_input() {
+    fn surface_area_1_small_input() {
         let positions = parse(SMALL_INPUT);
         assert_eq!(surface_area_1(&positions), 64);
+    }
+
+    #[test]
+    fn surface_area_2_small_input() {
+        let positions = parse(SMALL_INPUT);
+        assert_eq!(surface_area_2(&positions), 58);
     }
 }
