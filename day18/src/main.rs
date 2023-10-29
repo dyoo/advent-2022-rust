@@ -88,43 +88,42 @@ impl<'a> FloodingBoundarySearch<'a> {
 
     fn can_reach_outside(&mut self, pos: Pos) -> bool {
         let mut visited = HashSet::new();
-        let result = self.search_internal(pos, &mut visited);
+        let result = self.flood_search(pos, &mut visited);
         for pos in visited {
             self.cache.insert(pos, result);
         }
         result
     }
 
-    fn search_internal(&mut self, pos: Pos, visited: &mut HashSet<Pos>) -> bool {
-        visited.insert(pos);
+    fn flood_search(&mut self, pos: Pos, visited: &mut HashSet<Pos>) -> bool {
+        let mut queue = vec![pos];
 
-        // Check the cache
-        if let Some(answer) = self.cache.get(&pos) {
-            return *answer;
-        }
+        while let Some(pos) = queue.pop() {
+            visited.insert(pos);
 
-        // Check the boundaries
-        if pos.x < self.x_bounds.0
-            || pos.x > self.x_bounds.1
-            || pos.y < self.y_bounds.0
-            || pos.y > self.y_bounds.1
-            || pos.z < self.z_bounds.0
-            || pos.z > self.z_bounds.1
-        {
-            return true;
-        }
+            // Check the cache
+            if let Some(answer) = self.cache.get(&pos) {
+                return *answer;
+            }
 
-        // Finally, check our neighbors (filtering folks we've visited)
-        for neighbor in pos
-            .faces()
-            .into_iter()
-            .filter(|c| !self.cubes.contains(c))
-            .filter(|p| !visited.contains(p))
-            .collect::<Vec<Pos>>()
-        {
-            if self.search_internal(neighbor, visited) {
+            // Check the boundaries
+            if pos.x < self.x_bounds.0
+                || pos.x > self.x_bounds.1
+                || pos.y < self.y_bounds.0
+                || pos.y > self.y_bounds.1
+                || pos.z < self.z_bounds.0
+                || pos.z > self.z_bounds.1
+            {
                 return true;
             }
+
+            // Finally, check our neighbors (filtering folks we've visited)
+            queue.extend(
+                pos.faces()
+                    .into_iter()
+                    .filter(|c| !self.cubes.contains(c))
+                    .filter(|p| !visited.contains(p)),
+            );
         }
 
         // If we exhaust all possibilities, return false.
