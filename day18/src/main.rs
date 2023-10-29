@@ -28,10 +28,14 @@ impl Pos {
 }
 
 fn surface_area(cubes: &[Pos]) -> usize {
-    let possible_faces = cubes.iter().flat_map(Pos::faces).collect::<HashSet<Pos>>();
+    let cubes_set = cubes.iter().copied().collect::<HashSet<Pos>>();
 
-    possible_faces
-        .difference(&cubes.iter().copied().collect::<HashSet<Pos>>())
+    // The number of exposed faces are those that are facing empty space
+    // (not occupied by an existing cube).
+    cubes
+        .iter()
+        .flat_map(Pos::faces)
+        .filter(|c| !cubes_set.contains(c))
         .count()
 }
 
@@ -46,7 +50,8 @@ fn parse(s: &str) -> Vec<Pos> {
 }
 
 fn main() {
-    println!("Hello, world!");
+    let input = std::fs::read_to_string("input.txt").unwrap();
+    println!("part 1: {}", surface_area(&parse(&input)));
 }
 
 #[cfg(test)]
@@ -54,7 +59,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn small_example() {
+    fn surface_area_small_example() {
         assert_eq!(
             surface_area(&vec![Pos::new(1, 1, 1), Pos::new(2, 1, 1)]),
             10
