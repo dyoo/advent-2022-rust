@@ -102,7 +102,7 @@ impl State {
     }
 }
 
-fn buying_spree(state: State, blueprint: &Blueprint) -> Vec<State> {
+fn get_neighbors(state: State, blueprint: &Blueprint) -> Vec<State> {
     let mut neighbors: Vec<State> = vec![state];
 
     // Greedily buy geode robots.
@@ -110,15 +110,39 @@ fn buying_spree(state: State, blueprint: &Blueprint) -> Vec<State> {
         .into_iter()
         .map(|s| {
             let to_purchase = s.purse.div(blueprint.geode);
-            if to_purchase > 0 {
-                println!("purchasing {} at {}", to_purchase, state.time_left);
-            }
-
             State {
                 purse: s.purse.sub(blueprint.geode.scalar_mul(to_purchase)),
                 geode_robots: s.geode_robots + to_purchase,
                 ..s
             }
+        })
+        .collect();
+
+    neighbors = neighbors
+        .into_iter()
+        .flat_map(|s| {
+            (0..=(s.purse.div(blueprint.obsidian)))
+                .rev()
+                .into_iter()
+                .map(move |to_purchase| State {
+                    purse: s.purse.sub(blueprint.obsidian.scalar_mul(to_purchase)),
+                    obsidian_robots: s.obsidian_robots + to_purchase,
+                    ..s
+                })
+        })
+        .collect();
+
+    neighbors = neighbors
+        .into_iter()
+        .flat_map(|s| {
+            (0..=(s.purse.div(blueprint.clay)))
+                .rev()
+                .into_iter()
+                .map(move |to_purchase| State {
+                    purse: s.purse.sub(blueprint.clay.scalar_mul(to_purchase)),
+                    clay_robots: s.clay_robots + to_purchase,
+                    ..s
+                })
         })
         .collect();
 
@@ -135,65 +159,53 @@ fn buying_spree(state: State, blueprint: &Blueprint) -> Vec<State> {
         })
         .collect();
 
-    neighbors = neighbors
-        .into_iter()
-        .flat_map(|s| {
-            (0..=(s.purse.div(blueprint.clay)))
-                .into_iter()
-                .map(move |to_purchase| State {
-                    purse: s.purse.sub(blueprint.clay.scalar_mul(to_purchase)),
-                    clay_robots: s.clay_robots + to_purchase,
-                    ..s
-                })
-        })
-        .collect();
-
-    neighbors = neighbors
-        .into_iter()
-        .flat_map(|s| {
-            (0..=(s.purse.div(blueprint.obsidian)))
-                .into_iter()
-                .map(move |to_purchase| State {
-                    purse: s.purse.sub(blueprint.obsidian.scalar_mul(to_purchase)),
-                    obsidian_robots: s.obsidian_robots + to_purchase,
-                    ..s
-                })
-        })
-        .collect();
-
     neighbors
+}
+
+fn optimistic_estimate(state: &State) -> u32 {
+    let mut result = state.purse.geode;
+    // Imagine being able to buy a geode robot every tick.
+    for i in 0..state.time_left {
+        result += state.geode_robots + i;
+    }
+    result
 }
 
 // Compute the quality of a blueprint, optimizing number of geodes.
 fn optimize_geodes(blueprint: &Blueprint) -> u32 {
     let state = State::new();
+    let mut best = 0;
 
-    fn search(state: &State, blueprint: &Blueprint) -> u32 {
-        if state.time_left == 0 {
-            return state.purse.geode;
-        } else if state.time_left == 1 {
-            return state.purse.geode + state.geode_robots;
+    fn search(state: &State, blueprint: &Blueprint, best: &mut u32) -> u32 {
+        if state.time_left <= 1 {
+            let result = state.purse.geode + state.geode_robots * state.time_left;
+            if result > *best {
+                println!("new best: {} {:?}", result, state);
+                *best = result;
+            }
+            return result;
+        }
+
+        if (optimistic_estimate(state) < *best) {
+            //println!("abandoning {:?}", state);
+            return 0;
         }
 
         // Simulate passage of time
         let state = state.time_passes();
 
-        let neighbors: Vec<State> = buying_spree(state, blueprint);
+        let neighbors: Vec<State> = get_neighbors(state, blueprint);
         //        println!("{:?}", neighbors);
 
         // Search neighbors, pick maximum.
         neighbors
             .into_iter()
-            .map(|n| search(&n, blueprint))
+            .map(|n| search(&n, blueprint, best))
             .max()
-            .unwrap_or_else(||
-			    // Should be impossible, but just in case.
-			    // If no neighbors, simulate the passage
-			    // of the remaining time.
-			    state.purse.geode + state.geode_robots * state.time_left)
+            .unwrap()
     }
 
-    search(&state, blueprint)
+    search(&state, blueprint, &mut best)
 }
 
 fn main() {
@@ -212,15 +224,17 @@ mod tests {
                 ..Currency::default()
             },
             clay: Currency {
-                ore: 4,
+                ore: 2,
                 ..Currency::default()
             },
             obsidian: Currency {
-                ore: 4,
+                ore: 3,
+                clay: 14,
                 ..Currency::default()
             },
             geode: Currency {
-                ore: 4,
+                ore: 2,
+                obsidian: 7,
                 ..Currency::default()
             },
         };
