@@ -86,24 +86,10 @@ impl State {
             geode_robots: 0,
         }
     }
-
-    // Simulates passage of time.
-    fn time_passes(&self) -> Self {
-        Self {
-            purse: Currency {
-                ore: self.purse.ore + self.ore_robots,
-                clay: self.purse.clay + self.clay_robots,
-                obsidian: self.purse.obsidian + self.obsidian_robots,
-                geode: self.purse.geode + self.geode_robots,
-            },
-            time_left: self.time_left - 1,
-            ..*self
-        }
-    }
 }
 
-fn get_neighbors(state: State, blueprint: &Blueprint) -> Vec<State> {
-    let mut neighbors: Vec<State> = vec![state];
+fn get_neighbors(state: &State, blueprint: &Blueprint) -> Vec<State> {
+    let mut neighbors: Vec<State> = vec![state.clone()];
 
     // Greedily buy geode robots.
     neighbors = neighbors
@@ -159,16 +145,17 @@ fn get_neighbors(state: State, blueprint: &Blueprint) -> Vec<State> {
         })
         .collect();
 
-    neighbors
-}
+    // Now harvest, after buying robots.
+    for neighbors in neighbors.iter_mut() {
+        neighbors.purse.ore += state.ore_robots;
+        neighbors.purse.clay += state.clay_robots;
+        neighbors.purse.obsidian += state.obsidian_robots;
+        neighbors.purse.geode += state.geode_robots;
 
-fn optimistic_estimate(state: &State) -> u32 {
-    let mut result = state.purse.geode;
-    // Imagine being able to buy a geode robot every tick.
-    for i in 0..state.time_left {
-        result += state.geode_robots + i;
+        neighbors.time_left -= 1;
     }
-    result
+
+    neighbors
 }
 
 // Compute the quality of a blueprint, optimizing number of geodes.
@@ -185,14 +172,6 @@ fn optimize_geodes(blueprint: &Blueprint) -> u32 {
             }
             return result;
         }
-
-        if (optimistic_estimate(state) < *best) {
-            //println!("abandoning {:?}", state);
-            return 0;
-        }
-
-        // Simulate passage of time
-        let state = state.time_passes();
 
         let neighbors: Vec<State> = get_neighbors(state, blueprint);
         //        println!("{:?}", neighbors);
