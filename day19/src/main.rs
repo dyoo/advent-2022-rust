@@ -170,68 +170,68 @@ fn get_neighbors(state: &State, blueprint: &Blueprint) -> Vec<State> {
 fn optimize_geodes(blueprint: &Blueprint) -> u32 {
     let state = State::new();
     let mut best = 0;
+    let mut queue = BinaryHeap::new();
+    queue.push((estimate(&state, blueprint), state));
 
-    fn search(state: &State, blueprint: &Blueprint, best: &mut u32) -> u32 {
+    while let Some((_, state)) = queue.pop() {
         let current_estimate = estimate(&state, blueprint);
+        println!("estimate: {}, best: {}", current_estimate, best);
 
         if state.time_left <= 1 {
             let result = state.purse.geode + state.geode_robots * state.time_left;
-            if result > *best {
-                *best = result;
+            if result > best {
+                best = result;
             }
-
-            return result;
+            continue;
         }
 
-        if current_estimate < *best {
-            return 0;
+        if current_estimate < best {
+            continue;
         }
 
-        let neighbors: Vec<State> = get_neighbors(state, blueprint);
-
-        // Search neighbors, pick maximum.
-        neighbors
-            .into_iter()
-            .map(|n| search(&n, blueprint, best))
-            .max()
-            .unwrap()
+        queue.extend(
+            get_neighbors(&state, blueprint)
+                .into_iter()
+                .map(|s| (estimate(&s, blueprint), s)),
+        );
     }
 
-    search(&state, blueprint, &mut best)
+    best
 }
 
 fn estimate(state: &State, blueprint: &Blueprint) -> u32 {
+    fn get_optimistic_neighbor(state: &State, blueprint: &Blueprint) -> State {
+        let geode_to_purchase = state.purse.div(blueprint.geode);
+        let obsidian_to_purchase = state.purse.div(blueprint.obsidian);
+        let clay_to_purchase = state.purse.div(blueprint.clay);
+        let ore_to_purchase = state.purse.div(blueprint.ore);
+
+        let mut optimistic_state = State {
+            purse: state
+                .purse
+                .saturating_sub(blueprint.geode.scalar_mul(geode_to_purchase))
+                .saturating_sub(blueprint.obsidian.scalar_mul(obsidian_to_purchase)),
+            geode_robots: state.geode_robots + geode_to_purchase,
+            obsidian_robots: state.obsidian_robots + obsidian_to_purchase,
+            clay_robots: state.clay_robots + clay_to_purchase,
+            ore_robots: state.ore_robots + ore_to_purchase,
+            ..state.clone()
+        };
+
+        optimistic_state.purse.ore += state.ore_robots;
+        optimistic_state.purse.clay += state.clay_robots;
+        optimistic_state.purse.obsidian += state.obsidian_robots;
+        optimistic_state.purse.geode += state.geode_robots;
+        optimistic_state.time_left -= 1;
+
+        optimistic_state
+    }
+
     let mut state = state.clone();
     while state.time_left > 1 {
         state = get_optimistic_neighbor(&state, blueprint);
     }
-    return state.purse.geode + state.geode_robots * state.time_left;
-}
-
-fn get_optimistic_neighbor(state: &State, blueprint: &Blueprint) -> State {
-    let geode_to_purchase = state.purse.div(blueprint.geode);
-    let obsidian_to_purchase = state.purse.div(blueprint.obsidian);
-    let clay_to_purchase = state.purse.div(blueprint.clay);
-    let ore_to_purchase = state.purse.div(blueprint.ore);
-
-    let mut optimistic_state = State {
-        purse: (state.purse)
-            .saturating_sub(blueprint.geode.scalar_mul(geode_to_purchase))
-            .saturating_sub(blueprint.obsidian.scalar_mul(obsidian_to_purchase)),
-        geode_robots: state.geode_robots + geode_to_purchase,
-        obsidian_robots: state.obsidian_robots + obsidian_to_purchase,
-        clay_robots: state.clay_robots + clay_to_purchase,
-        ore_robots: state.ore_robots + ore_to_purchase,
-        ..state.clone()
-    };
-
-    optimistic_state.purse.ore += state.ore_robots;
-    optimistic_state.purse.clay += state.clay_robots;
-    optimistic_state.purse.obsidian += state.obsidian_robots;
-    optimistic_state.purse.geode += state.geode_robots;
-    optimistic_state.time_left -= 1;
-
-    optimistic_state
+    return state.purse.geode + (state.geode_robots) * state.time_left;
 }
 
 fn main() {
