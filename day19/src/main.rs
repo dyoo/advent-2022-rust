@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 #[derive(Debug, PartialEq, Eq, Default, Clone, Copy, Hash)]
 struct Currency {
     ore: u32,
@@ -43,6 +41,15 @@ impl Currency {
             clay: self.clay - other.clay,
             obsidian: self.obsidian - other.obsidian,
             geode: self.geode - other.geode,
+        }
+    }
+
+    fn saturating_sub(&self, other: Currency) -> Currency {
+        Currency {
+            ore: self.ore.saturating_sub(other.ore),
+            clay: self.clay.saturating_sub(other.clay),
+            obsidian: self.obsidian.saturating_sub(other.obsidian),
+            geode: self.geode.saturating_sub(other.geode),
         }
     }
 
@@ -136,6 +143,7 @@ fn get_neighbors(state: &State, blueprint: &Blueprint) -> Vec<State> {
         .into_iter()
         .flat_map(|s| {
             (0..=(s.purse.div(blueprint.ore)))
+                .rev()
                 .into_iter()
                 .map(move |to_purchase| State {
                     purse: s.purse.sub(blueprint.ore.scalar_mul(to_purchase)),
@@ -164,17 +172,22 @@ fn optimize_geodes(blueprint: &Blueprint) -> u32 {
     let mut best = 0;
 
     fn search(state: &State, blueprint: &Blueprint, best: &mut u32) -> u32 {
+        let current_estimate = estimate(&state, blueprint);
+
         if state.time_left <= 1 {
             let result = state.purse.geode + state.geode_robots * state.time_left;
             if result > *best {
-                println!("new best: {} {:?}", result, state);
                 *best = result;
             }
+
             return result;
         }
 
+        if current_estimate < *best {
+            return 0;
+        }
+
         let neighbors: Vec<State> = get_neighbors(state, blueprint);
-        //        println!("{:?}", neighbors);
 
         // Search neighbors, pick maximum.
         neighbors
@@ -185,6 +198,40 @@ fn optimize_geodes(blueprint: &Blueprint) -> u32 {
     }
 
     search(&state, blueprint, &mut best)
+}
+
+fn estimate(state: &State, blueprint: &Blueprint) -> u32 {
+    let mut state = state.clone();
+    while state.time_left > 1 {
+        state = get_optimistic_neighbor(&state, blueprint);
+    }
+    return state.purse.geode + state.geode_robots * state.time_left;
+}
+
+fn get_optimistic_neighbor(state: &State, blueprint: &Blueprint) -> State {
+    let geode_to_purchase = state.purse.div(blueprint.geode);
+    let obsidian_to_purchase = state.purse.div(blueprint.obsidian);
+    let clay_to_purchase = state.purse.div(blueprint.clay);
+    let ore_to_purchase = state.purse.div(blueprint.ore);
+
+    let mut optimistic_state = State {
+        purse: (state.purse)
+            .saturating_sub(blueprint.geode.scalar_mul(geode_to_purchase))
+            .saturating_sub(blueprint.obsidian.scalar_mul(obsidian_to_purchase)),
+        geode_robots: state.geode_robots + geode_to_purchase,
+        obsidian_robots: state.obsidian_robots + obsidian_to_purchase,
+        clay_robots: state.clay_robots + clay_to_purchase,
+        ore_robots: state.ore_robots + ore_to_purchase,
+        ..state.clone()
+    };
+
+    optimistic_state.purse.ore += state.ore_robots;
+    optimistic_state.purse.clay += state.clay_robots;
+    optimistic_state.purse.obsidian += state.obsidian_robots;
+    optimistic_state.purse.geode += state.geode_robots;
+    optimistic_state.time_left -= 1;
+
+    optimistic_state
 }
 
 fn main() {
