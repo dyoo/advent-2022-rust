@@ -132,7 +132,14 @@ fn grove_coords(dlist: &mut Dlist) -> Option<i32> {
 }
 
 fn main() {
-    println!("Hello, world!");
+    let vals: Vec<i32> = std::fs::read_to_string("input.txt")
+        .expect("input.txt")
+        .split_whitespace()
+        .map(|s| s.parse::<i32>().expect("number"))
+        .collect();
+    let mut dlist = Dlist::new(vals);
+    encrypt(&mut dlist);
+    println!("part 1: {:?}", grove_coords(&mut dlist));
 }
 
 #[cfg(test)]
