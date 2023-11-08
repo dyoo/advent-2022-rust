@@ -38,16 +38,32 @@ impl Dlist {
         self.preds[next] = prev;
         next
     }
+
+    fn insert(&mut self, insertion: usize, insert_at: usize) -> usize {
+        let prev = self.back(insert_at);
+        self.succs[prev] = insertion;
+        self.preds[insertion] = prev;
+
+        self.succs[insertion] = insert_at;
+        self.preds[insert_at] = insertion;
+
+        insert_at
+    }
 }
 
 struct DlistCursor<'a> {
     dlist: &'a mut Dlist,
     index: usize,
+    clip: Option<usize>,
 }
 
 impl<'a> DlistCursor<'a> {
     fn new(dlist: &'a mut Dlist, index: usize) -> Self {
-        Self { dlist, index }
+        Self {
+            dlist,
+            index,
+            clip: None,
+        }
     }
 
     fn val(&self) -> i32 {
@@ -63,7 +79,24 @@ impl<'a> DlistCursor<'a> {
     }
 
     fn delete(&mut self) {
+        self.clip = Some(self.index);
         self.index = self.dlist.delete(self.index);
+    }
+
+    fn insert(&mut self) {
+        if let Some(to_insert) = self.clip {
+            self.index = self.dlist.insert(to_insert, self.index);
+            self.clip = None;
+        }
+    }
+}
+
+impl<'a> Iterator for DlistCursor<'a> {
+    type Item = i32;
+    fn next(&mut self) -> Option<i32> {
+        let result = self.val();
+        self.forward();
+        Some(result)
     }
 }
 
@@ -86,6 +119,19 @@ mod tests {
         assert_eq!(4, cursor.val());
         cursor.forward();
         assert_eq!(3, cursor.val());
+    }
+
+    #[test]
+    fn iteration() {
+        let mut dlist = Dlist::new([3, 1, 4]);
+        let cursor = DlistCursor::new(&mut dlist, 0);
+        assert_eq!(cursor.take(6).collect::<Vec<_>>(), vec![3, 1, 4, 3, 1, 4]);
+
+        let cursor = DlistCursor::new(&mut dlist, 1);
+        assert_eq!(cursor.take(6).collect::<Vec<_>>(), vec![1, 4, 3, 1, 4, 3]);
+
+        let cursor = DlistCursor::new(&mut dlist, 2);
+        assert_eq!(cursor.take(6).collect::<Vec<_>>(), vec![4, 3, 1, 4, 3, 1]);
     }
 
     #[test]
