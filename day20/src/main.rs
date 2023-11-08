@@ -100,6 +100,24 @@ impl<'a> Iterator for DlistCursor<'a> {
     }
 }
 
+fn encrypt(dlist: &mut Dlist) {
+    for i in 0..dlist.vals.len() {
+        let mut cursor = DlistCursor::new(dlist, i);
+        let n = cursor.val();
+        cursor.delete();
+        if n > 0 {
+            for _ in 0..n {
+                cursor.forward();
+            }
+        } else {
+            for _ in 0..(-n) {
+                cursor.back();
+            }
+        }
+        cursor.insert();
+    }
+}
+
 fn main() {
     println!("Hello, world!");
 }
@@ -159,5 +177,91 @@ mod tests {
         assert_eq!(1, cursor.val());
         cursor.back();
         assert_eq!(4, cursor.val());
+    }
+
+    #[test]
+    fn insertion_deletion_manually() {
+        let mut dlist = Dlist::new([1, 2, -3, 3, -2, 0, 4]);
+        let mut cursor = DlistCursor::new(&mut dlist, 0);
+        cursor.delete();
+        cursor.forward();
+        cursor.insert();
+        assert_eq!(
+            cursor.take(7).collect::<Vec<_>>(),
+            vec![-3, 3, -2, 0, 4, 2, 1]
+        );
+
+        let mut cursor = DlistCursor::new(&mut dlist, 1);
+        cursor.delete();
+        cursor.forward();
+        cursor.forward();
+        cursor.insert();
+        assert_eq!(
+            cursor.take(7).collect::<Vec<_>>(),
+            vec![3, -2, 0, 4, 1, -3, 2]
+        );
+
+        let mut cursor = DlistCursor::new(&mut dlist, 2);
+        cursor.delete();
+        cursor.back();
+        cursor.back();
+        cursor.back();
+        cursor.insert();
+        assert_eq!(
+            cursor.take(7).collect::<Vec<_>>(),
+            vec![0, 4, 1, 2, 3, -2, -3]
+        );
+
+        let mut cursor = DlistCursor::new(&mut dlist, 3);
+        cursor.delete();
+        cursor.forward();
+        cursor.forward();
+        cursor.forward();
+        cursor.insert();
+        assert_eq!(
+            cursor.take(7).collect::<Vec<_>>(),
+            vec![4, 1, 2, -2, -3, 0, 3]
+        );
+
+        let mut cursor = DlistCursor::new(&mut dlist, 4);
+        cursor.delete();
+        cursor.back();
+        cursor.back();
+        cursor.insert();
+        assert_eq!(
+            cursor.take(7).collect::<Vec<_>>(),
+            vec![1, 2, -3, 0, 3, 4, -2]
+        );
+
+        let mut cursor = DlistCursor::new(&mut dlist, 5);
+        cursor.delete();
+        cursor.insert();
+        assert_eq!(
+            cursor.take(7).collect::<Vec<_>>(),
+            vec![3, 4, -2, 1, 2, -3, 0]
+        );
+
+        let mut cursor = DlistCursor::new(&mut dlist, 6);
+        cursor.delete();
+        cursor.forward();
+        cursor.forward();
+        cursor.forward();
+        cursor.forward();
+        cursor.insert();
+        assert_eq!(
+            cursor.take(7).collect::<Vec<_>>(),
+            vec![0, 3, -2, 1, 2, -3, 4]
+        );
+    }
+
+    #[test]
+    fn test_encrypt() {
+        let mut dlist = Dlist::new([1, 2, -3, 3, -2, 0, 4]);
+        encrypt(&mut dlist);
+        let cursor = DlistCursor::new(&mut dlist, 0);
+        assert_eq!(
+            cursor.take(7).collect::<Vec<_>>(),
+            vec![1, 2, -3, 4, 0, 3, -2]
+        );
     }
 }
