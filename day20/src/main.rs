@@ -1,16 +1,12 @@
-trait ToSlice {
-    fn to_slice(&self) -> &[i32];
-}
-
 struct Dlist {
-    vals: Vec<i32>,
+    vals: Vec<i64>,
     preds: Vec<usize>,
     succs: Vec<usize>,
 }
 
 impl Dlist {
-    fn new(vals: impl IntoIterator<Item = i32>) -> Self {
-        let vals: Vec<i32> = vals.into_iter().collect();
+    fn new(vals: impl IntoIterator<Item = i64>) -> Self {
+        let vals: Vec<i64> = vals.into_iter().collect();
         let n = vals.len();
         Self {
             vals,
@@ -19,7 +15,7 @@ impl Dlist {
         }
     }
 
-    fn val(&self, index: usize) -> i32 {
+    fn val(&self, index: usize) -> i64 {
         self.vals[index]
     }
 
@@ -66,7 +62,7 @@ impl<'a> DlistCursor<'a> {
         }
     }
 
-    fn val(&self) -> i32 {
+    fn val(&self) -> i64 {
         self.dlist.val(self.index)
     }
 
@@ -92,8 +88,8 @@ impl<'a> DlistCursor<'a> {
 }
 
 impl<'a> Iterator for DlistCursor<'a> {
-    type Item = i32;
-    fn next(&mut self) -> Option<i32> {
+    type Item = i64;
+    fn next(&mut self) -> Option<i64> {
         let result = self.val();
         self.forward();
         Some(result)
@@ -101,16 +97,17 @@ impl<'a> Iterator for DlistCursor<'a> {
 }
 
 fn encrypt(dlist: &mut Dlist) {
-    for i in 0..dlist.vals.len() {
+    let dlist_size = dlist.vals.len();
+    for i in 0..dlist_size {
         let mut cursor = DlistCursor::new(dlist, i);
         let n = cursor.val();
         cursor.delete();
         if n > 0 {
-            for _ in 0..n {
+            for _ in 0..(n as usize % (dlist_size - 1)) {
                 cursor.forward();
             }
         } else {
-            for _ in 0..(-n) {
+            for _ in 0..(-n as usize % (dlist_size - 1)) {
                 cursor.back();
             }
         }
@@ -118,7 +115,7 @@ fn encrypt(dlist: &mut Dlist) {
     }
 }
 
-fn grove_coords(dlist: &mut Dlist) -> Option<i32> {
+fn grove_coords(dlist: &mut Dlist) -> Option<i64> {
     for (i, v) in dlist.vals.iter().enumerate() {
         if *v == 0 {
             let mut cursor = DlistCursor::new(dlist, i);
@@ -132,14 +129,21 @@ fn grove_coords(dlist: &mut Dlist) -> Option<i32> {
 }
 
 fn main() {
-    let vals: Vec<i32> = std::fs::read_to_string("input.txt")
+    let vals: Vec<i64> = std::fs::read_to_string("input.txt")
         .expect("input.txt")
         .split_whitespace()
-        .map(|s| s.parse::<i32>().expect("number"))
+        .map(|s| s.parse::<i64>().expect("number"))
         .collect();
-    let mut dlist = Dlist::new(vals);
+
+    let mut dlist = Dlist::new(vals.iter().copied());
     encrypt(&mut dlist);
     println!("part 1: {:?}", grove_coords(&mut dlist));
+
+    let mut dlist = Dlist::new(vals.iter().copied().map(|v| v * 811589153));
+    for _ in 0..10 {
+        encrypt(&mut dlist);
+    }
+    println!("part 2: {:?}", grove_coords(&mut dlist));
 }
 
 #[cfg(test)]
@@ -289,5 +293,32 @@ mod tests {
     fn test_coords() {
         let mut dlist = Dlist::new([1, 2, -3, 4, 0, 3, -2]);
         assert_eq!(grove_coords(&mut dlist), Some(3));
+    }
+
+    #[test]
+    fn larger_numbers() {
+        let mut dlist = Dlist::new([
+            811589153,
+            1623178306,
+            -2434767459,
+            2434767459,
+            -1623178306,
+            0,
+            3246356612,
+        ]);
+        encrypt(&mut dlist);
+        let cursor = DlistCursor::new(&mut dlist, 5);
+        assert_eq!(
+            cursor.take(7).collect::<Vec<_>>(),
+            vec![
+                0,
+                -2434767459,
+                3246356612,
+                -1623178306,
+                2434767459,
+                1623178306,
+                811589153
+            ]
+        );
     }
 }
