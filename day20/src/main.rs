@@ -30,15 +30,23 @@ impl Dlist {
     fn back(&self, index: usize) -> usize {
         self.preds[index]
     }
+
+    fn delete(&mut self, index: usize) -> usize {
+        let next = self.forward(index);
+        let prev = self.back(index);
+        self.succs[prev] = next;
+        self.preds[next] = prev;
+        next
+    }
 }
 
 struct DlistCursor<'a> {
-    dlist: &'a Dlist,
+    dlist: &'a mut Dlist,
     index: usize,
 }
 
 impl<'a> DlistCursor<'a> {
-    fn new(dlist: &'a Dlist, index: usize) -> Self {
+    fn new(dlist: &'a mut Dlist, index: usize) -> Self {
         Self { dlist, index }
     }
 
@@ -53,6 +61,10 @@ impl<'a> DlistCursor<'a> {
     fn back(&mut self) {
         self.index = self.dlist.back(self.index);
     }
+
+    fn delete(&mut self) {
+        self.index = self.dlist.delete(self.index);
+    }
 }
 
 fn main() {
@@ -65,8 +77,8 @@ mod tests {
 
     #[test]
     fn moving_forward() {
-        let dlist = Dlist::new([3, 1, 4]);
-        let mut cursor = DlistCursor::new(&dlist, 0);
+        let mut dlist = Dlist::new([3, 1, 4]);
+        let mut cursor = DlistCursor::new(&mut dlist, 0);
         assert_eq!(3, cursor.val());
         cursor.forward();
         assert_eq!(1, cursor.val());
@@ -78,8 +90,8 @@ mod tests {
 
     #[test]
     fn moving_back() {
-        let dlist = Dlist::new([3, 1, 4]);
-        let mut cursor = DlistCursor::new(&dlist, 0);
+        let mut dlist = Dlist::new([3, 1, 4]);
+        let mut cursor = DlistCursor::new(&mut dlist, 0);
         assert_eq!(3, cursor.val());
         cursor.back();
         assert_eq!(4, cursor.val());
@@ -87,5 +99,19 @@ mod tests {
         assert_eq!(1, cursor.val());
         cursor.back();
         assert_eq!(3, cursor.val());
+    }
+
+    #[test]
+    fn deletion() {
+        let mut dlist = Dlist::new([3, 1, 4]);
+        let mut cursor = DlistCursor::new(&mut dlist, 0);
+        cursor.delete();
+        assert_eq!(1, cursor.val());
+        cursor.forward();
+        assert_eq!(4, cursor.val());
+        cursor.forward();
+        assert_eq!(1, cursor.val());
+        cursor.back();
+        assert_eq!(4, cursor.val());
     }
 }
