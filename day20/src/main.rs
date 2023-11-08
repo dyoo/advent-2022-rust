@@ -118,6 +118,19 @@ fn encrypt(dlist: &mut Dlist) {
     }
 }
 
+fn grove_coords(dlist: &mut Dlist) -> Option<i32> {
+    for (i, v) in dlist.vals.iter().enumerate() {
+        if *v == 0 {
+            let mut cursor = DlistCursor::new(dlist, i);
+            let x = cursor.nth(1000)?;
+            let y = cursor.nth(999)?;
+            let z = cursor.nth(999)?;
+            return Some(x + y + z);
+        }
+    }
+    return None;
+}
+
 fn main() {
     println!("Hello, world!");
 }
@@ -263,5 +276,11 @@ mod tests {
             cursor.take(7).collect::<Vec<_>>(),
             vec![1, 2, -3, 4, 0, 3, -2]
         );
+    }
+
+    #[test]
+    fn test_coords() {
+        let mut dlist = Dlist::new([1, 2, -3, 4, 0, 3, -2]);
+        assert_eq!(grove_coords(&mut dlist), Some(3));
     }
 }
