@@ -29,7 +29,7 @@ impl<'a> JobList<'a> {
     // For part 2 of the problem, we'll take a numeric calculus approach
     // and treat this as a minimization problem.  The answer we're looking for
     // should have a loss of 0.
-    fn loss(&self, guess: f64) -> f64 {
+    pub fn loss(&self, guess: f64) -> f64 {
         match &self.jobs.get("root").unwrap().1 {
             Expr::BinOp { op, lhs, rhs } => f64::powf(
                 self.get_money_part_2(lhs, guess) - self.get_money_part_2(rhs, guess),
@@ -72,16 +72,15 @@ pub fn parse_all_jobs(s: &str) -> JobList {
     }
 }
 
-const DELTA: f64 = 0.0001;
-const LEARNING: f64 = 0.1;
+const LEARNING: f64 = 0.0001;
 
-fn find_minimum(f: impl Fn(f64) -> f64) -> f64 {
+pub fn find_minimum(f: impl Fn(f64) -> f64, delta: f64) -> f64 {
     // Compute derivative (f(x+delta) -f(x)) / delta
     let mut x: f64 = 1.0;
     for i in 0..1000 {
         let fx = f(x);
-        let fdelta = f(x + DELTA);
-        let neg_deriv = -(fdelta - fx) / DELTA;
+        let fdelta = f(x + delta);
+        let neg_deriv = -(fdelta - fx) / delta;
 
         if i % 10 == 0 {
             println!("{}: guess={}, fx={}, neg_deriv={}", i, x, fx, neg_deriv);
@@ -196,7 +195,6 @@ hmdt: 32
 ";
     let joblist = parse_all_jobs(s);
 
-    let min = find_minimum(|x| joblist.loss(x));
-
-    assert_eq!(min, 301.0);
+    let min = find_minimum(|x| joblist.loss(x), 0.0001);
+    assert!(min.abs_sub(301.0) < 0.000000001);
 }
