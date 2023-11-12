@@ -9,7 +9,7 @@ use nom::{
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Expr<'a> {
-    Num(i32),
+    Num(i64),
     BinOp { op: Op, lhs: &'a str, rhs: &'a str },
 }
 
@@ -36,7 +36,7 @@ fn parse_expr(s: &str) -> IResult<&str, Expr> {
 }
 
 fn parse_num(s: &str) -> IResult<&str, Expr> {
-    let parser = map_res(digit1, |s: &str| s.parse::<i32>());
+    let parser = map_res(digit1, |s: &str| s.parse::<i64>());
     let mut parser = map(parser, Expr::Num);
     parser(s)
 }
