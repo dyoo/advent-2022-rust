@@ -1,8 +1,9 @@
 use nom::{
     branch::alt,
+    bytes::complete::tag,
     character::complete::{alpha1, char, digit1, multispace0},
     combinator::{map, map_res},
-    sequence::{delimited, tuple},
+    sequence::{delimited, separated_pair, tuple},
     IResult,
 };
 
@@ -20,14 +21,23 @@ pub enum Op {
     Div,
 }
 
-fn parse_num(s: &str) -> IResult<&str, Expr> {
-    let parser = map_res(digit1, |s: &str| s.parse::<i32>());
-    let mut parser = map(parser, Expr::Num);
+#[derive(Debug, PartialEq, Eq)]
+pub struct Job<'a>(&'a str, Expr<'a>);
+
+fn parse_job(s: &str) -> IResult<&str, Job> {
+    let parser = separated_pair(alpha1, tag(":"), parse_expr);
+    let mut parser = map(parser, |(name, expr)| Job(name, expr));
     parser(s)
 }
 
 fn parse_expr(s: &str) -> IResult<&str, Expr> {
-    let mut parser = alt((parse_num, parse_binop));
+    let mut parser = alt((delimited(multispace0, parse_num, multispace0), parse_binop));
+    parser(s)
+}
+
+fn parse_num(s: &str) -> IResult<&str, Expr> {
+    let parser = map_res(digit1, |s: &str| s.parse::<i32>());
+    let mut parser = map(parser, Expr::Num);
     parser(s)
 }
 
@@ -96,4 +106,43 @@ fn test_parse_number() {
 #[test]
 fn test_parse_op() {
     assert_eq!(parse_op("+ abcd"), Ok((" abcd", Op::Add)));
+}
+
+#[test]
+fn test_parse_expr() {
+    assert_eq!(parse_expr("1234"), Ok(("", Expr::Num(1234))));
+    assert_eq!(
+        parse_expr("abcd/xyz"),
+        Ok((
+            "",
+            Expr::BinOp {
+                op: Op::Div,
+                lhs: "abcd",
+                rhs: "xyz"
+            }
+        ))
+    );
+}
+
+#[test]
+fn test_parse_job_num() {
+    assert_eq!(parse_job("dbpl: 5"), Ok(("", Job("dbpl", Expr::Num(5)))));
+}
+
+#[test]
+fn test_parse_job_add() {
+    assert_eq!(
+        parse_job("root: pppw + sjmn"),
+        Ok((
+            "",
+            Job(
+                "root",
+                Expr::BinOp {
+                    op: Op::Add,
+                    lhs: "pppw",
+                    rhs: "sjmn"
+                }
+            )
+        ))
+    );
 }
