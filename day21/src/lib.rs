@@ -1,6 +1,5 @@
 mod parser;
 
-use nom::IResult;
 use std::collections::HashMap;
 
 use parser::{Expr, Job, Op};
