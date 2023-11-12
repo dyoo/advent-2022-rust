@@ -72,7 +72,7 @@ pub fn parse_all_jobs(s: &str) -> JobList {
     }
 }
 
-const LEARNING: f64 = 0.0001;
+const LEARNING: f64 = 0.001;
 
 pub fn find_minimum(f: impl Fn(f64) -> f64, delta: f64) -> f64 {
     // Compute derivative (f(x+delta) -f(x)) / delta
@@ -86,9 +86,14 @@ pub fn find_minimum(f: impl Fn(f64) -> f64, delta: f64) -> f64 {
             println!("{}: guess={}, fx={}, neg_deriv={}", i, x, fx, neg_deriv);
         }
 
-        x += neg_deriv * LEARNING;
+        x = avg(x, x + neg_deriv * LEARNING);
     }
     x
+}
+
+// Average used to dampen the guess.
+fn avg(x: f64, y: f64) -> f64 {
+    (x + y) / 2.0
 }
 
 #[test]
