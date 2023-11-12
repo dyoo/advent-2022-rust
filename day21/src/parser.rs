@@ -22,9 +22,9 @@ pub enum Op {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Job<'a>(&'a str, Expr<'a>);
+pub struct Job<'a>(pub &'a str, pub Expr<'a>);
 
-fn parse_job(s: &str) -> IResult<&str, Job> {
+pub fn parse_job(s: &str) -> IResult<&str, Job> {
     let parser = separated_pair(alpha1, tag(":"), parse_expr);
     let mut parser = map(parser, |(name, expr)| Job(name, expr));
     parser(s)
