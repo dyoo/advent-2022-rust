@@ -1,26 +1,26 @@
 #[derive(Debug, Clone, Copy)]
-enum Direction {
-    North,
-    East,
-    South,
-    West,
+enum Dir {
+    North = 3,
+    East = 0,
+    South = 1,
+    West = 2,
 }
-impl Direction {
+impl Dir {
     fn clock(self) -> Self {
         match self {
-            Direction::North => Direction::East,
-            Direction::East => Direction::South,
-            Direction::South => Direction::West,
-            Direction::West => Direction::North,
+            Dir::North => Dir::East,
+            Dir::East => Dir::South,
+            Dir::South => Dir::West,
+            Dir::West => Dir::North,
         }
     }
 
     fn counterclock(self) -> Self {
         match self {
-            Direction::North => Direction::West,
-            Direction::East => Direction::North,
-            Direction::South => Direction::East,
-            Direction::West => Direction::South,
+            Dir::North => Dir::West,
+            Dir::East => Dir::North,
+            Dir::South => Dir::East,
+            Dir::West => Dir::South,
         }
     }
 }
@@ -29,16 +29,90 @@ impl Direction {
 struct Pos {
     x: usize,
     y: usize,
+    dir: Dir,
+}
+impl Pos {
+    fn password(&self) -> i32 {
+        1000 * (self.y as i32 + 1) + 4 * (self.x as i32 + 1) + self.dir as i32
+    }
 }
 
 #[derive(Debug)]
 struct Problem {
     map: Vec<Vec<char>>,
-    moves: Vec<Move>,
+    moves: Vec<Action>,
 }
 
-#[derive(Debug)]
-enum Move {
+impl Problem {
+    fn initial_pos(&self) -> Option<Pos> {
+        for (i, ch) in self.map[0].iter().enumerate() {
+            if *ch == '.' {
+                return Some(Pos {
+                    x: i,
+                    y: 0,
+                    dir: Dir::East,
+                });
+            }
+        }
+        None
+    }
+
+    fn forward1(&self, Pos { mut x, mut y, dir }: Pos) -> Pos {
+        loop {
+            let (mut new_x, mut new_y) = (x, y);
+            match dir {
+                Dir::North => {
+                    new_y = y.checked_add_signed(-1).unwrap_or(self.map.len() - 1);
+                }
+                Dir::West => {
+                    new_x = x.checked_add_signed(-1).unwrap_or(self.map[0].len() - 1);
+                }
+                Dir::South => {
+                    new_y = (y + 1) % self.map.len();
+                }
+                Dir::East => {
+                    new_x = (x + 1) % self.map[y].len();
+                }
+            }
+
+            match self.map[new_y].get(new_x).unwrap_or(&' ') {
+                '#' => {
+                    return Pos { x, y, dir };
+                }
+                '.' => {
+                    return Pos {
+                        x: new_x,
+                        y: new_y,
+                        dir,
+                    };
+                }
+                _ => {
+                    x = new_x;
+                    y = new_y;
+                }
+            }
+        }
+    }
+
+    fn apply_move(&self, p: Pos, a: Action) -> Pos {
+        match a {
+            Action::Forward(n) => (0..n).fold(p, |acc, _| self.forward1(acc)),
+
+            Action::Clock => Pos {
+                dir: p.dir.clock(),
+                ..p
+            },
+
+            Action::Counterclock => Pos {
+                dir: p.dir.counterclock(),
+                ..p
+            },
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+enum Action {
     Forward(usize),
     Clock,
     Counterclock,
@@ -52,27 +126,27 @@ fn parse_input(s: &str) -> Option<Problem> {
     Some(Problem { map, moves })
 }
 
-fn parse_moves(s: &str) -> Vec<Move> {
+fn parse_moves(s: &str) -> Vec<Action> {
     let mut moves = Vec::new();
     let mut n = 0;
     for ch in s.trim().chars() {
         match ch {
             '0'..='9' => n = n * 10 + (ch as usize - '0' as usize),
             'L' => {
-                moves.push(Move::Forward(n));
-                moves.push(Move::Counterclock);
+                moves.push(Action::Forward(n));
+                moves.push(Action::Counterclock);
                 n = 0;
             }
             'R' => {
-                moves.push(Move::Forward(n));
-                moves.push(Move::Clock);
+                moves.push(Action::Forward(n));
+                moves.push(Action::Clock);
                 n = 0;
             }
             _ => {}
         }
     }
     if n != 0 {
-        moves.push(Move::Forward(n));
+        moves.push(Action::Forward(n));
     }
     moves
 }
@@ -85,7 +159,37 @@ fn parse_map(s: &str) -> Vec<Vec<char>> {
     map
 }
 
+fn part_1(s: &str) -> i32 {
+    let problem = parse_input(s).unwrap();
+    let mut pos = problem.initial_pos().unwrap();
+    for &a in &problem.moves {
+        pos = problem.apply_move(pos, a);
+    }
+    pos.password()
+}
+
+#[test]
+fn test_part1() {
+    let input = "
+        ...#
+        .#..
+        #...
+        ....
+...#.......#
+........#...
+..#....#....
+..........#.
+        ...#....
+        .....#..
+        .#......
+        ......#.
+
+10R5L5R10L4R5L5
+";
+    assert_eq!(part_1(input), 6032);
+}
+
 fn main() {
     let input = std::fs::read_to_string("input.txt").unwrap();
-    dbg!(parse_input(&input).unwrap());
+    println!("Part 1: {}", part_1(&input));
 }
