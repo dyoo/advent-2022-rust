@@ -1,4 +1,31 @@
 #[derive(Debug, Clone, Copy)]
+enum Direction {
+    North,
+    East,
+    South,
+    West,
+}
+impl Direction {
+    fn clock(self) -> Self {
+        match self {
+            Direction::North => Direction::East,
+            Direction::East => Direction::South,
+            Direction::South => Direction::West,
+            Direction::West => Direction::North,
+        }
+    }
+
+    fn counterclock(self) -> Self {
+        match self {
+            Direction::North => Direction::West,
+            Direction::East => Direction::North,
+            Direction::South => Direction::East,
+            Direction::West => Direction::South,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 struct Pos {
     x: usize,
     y: usize,
