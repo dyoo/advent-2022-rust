@@ -174,7 +174,7 @@ fn part_1(s: &str) -> i32 {
 
 #[test]
 fn test_part1() {
-    let input = "
+    let input = "\
         ...#
         .#..
         #...
