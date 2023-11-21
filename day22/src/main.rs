@@ -123,7 +123,7 @@ enum Action {
 
 fn parse_input(s: &str) -> Option<Problem> {
     let mut chunks = s.split("\n\n");
-    let map = parse_map(chunks.next()?.trim());
+    let map = parse_map(chunks.next()?);
     let moves = parse_moves(chunks.next()?);
 
     Some(Problem { map, moves })
@@ -166,6 +166,7 @@ fn part_1(s: &str) -> i32 {
     let problem = parse_input(s).unwrap();
     let mut pos = problem.initial_pos().unwrap();
     for &a in &problem.moves {
+        println!("{:?}", pos);
         pos = problem.apply_move(pos, a);
     }
     pos.password()
