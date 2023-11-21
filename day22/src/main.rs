@@ -1,4 +1,4 @@
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum Dir {
     North = 3,
     East = 0,
@@ -25,7 +25,7 @@ impl Dir {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 struct Pos {
     x: usize,
     y: usize,
@@ -163,13 +163,62 @@ fn parse_map(s: &str) -> Vec<Vec<char>> {
 }
 
 fn part_1(s: &str) -> i32 {
+    let pos = get_final_pos(s);
+    pos.password()
+}
+
+/** Given the problem, returns final position. */
+fn get_final_pos(s: &str) -> Pos {
     let problem = parse_input(s).unwrap();
+    println!("{:?}", problem);
     let mut pos = problem.initial_pos().unwrap();
     for &a in &problem.moves {
-        println!("{:?}", pos);
         pos = problem.apply_move(pos, a);
     }
-    pos.password()
+    pos
+}
+
+/** Given the problem, shows what the path looks like. */
+fn visualize(s: &str) {
+    let problem = parse_input(s).unwrap();
+    let mut pos = problem.initial_pos().unwrap();
+    let mut all_pos = vec![pos];
+
+    let moves = problem
+        .moves
+        .iter()
+        .cloned()
+        .flat_map(|action| match action {
+            Action::Forward(i) => (0..i).map(|_| Action::Forward(1)).collect::<Vec<Action>>(),
+            Action::Clock => vec![Action::Clock],
+            Action::Counterclock => vec![Action::Counterclock],
+        })
+        .collect::<Vec<Action>>();
+
+    for &a in &moves {
+        pos = problem.apply_move(pos, a);
+        all_pos.push(pos);
+    }
+
+    let mut map = problem.map.clone();
+
+    for Pos { x, y, dir } in all_pos {
+        println!();
+        println!();
+        for line in &map {
+            for char in line {
+                print!("{}", char);
+            }
+            println!();
+        }
+
+        map[y][x] = match dir {
+            Dir::North => '^',
+            Dir::East => '>',
+            Dir::South => 'V',
+            Dir::West => '<',
+        }
+    }
 }
 
 #[test]
@@ -193,7 +242,98 @@ fn test_part1() {
     assert_eq!(part_1(input), 6032);
 }
 
+#[test]
+fn test_get_final_pos() {
+    let pos = get_final_pos(
+        "   ...
+
+1",
+    );
+    assert_eq!(
+        pos,
+        Pos {
+            x: 4,
+            y: 0,
+            dir: Dir::East
+        }
+    );
+
+    let pos = get_final_pos(
+        "   ...
+
+2",
+    );
+    assert_eq!(
+        pos,
+        Pos {
+            x: 5,
+            y: 0,
+            dir: Dir::East
+        }
+    );
+
+    let pos = get_final_pos(
+        "   ...
+
+3",
+    );
+    assert_eq!(
+        pos,
+        Pos {
+            x: 3,
+            y: 0,
+            dir: Dir::East
+        }
+    );
+}
+
+#[test]
+fn test_get_final_pos_left() {
+    let pos = get_final_pos(
+        "   ...
+
+RR1",
+    );
+    assert_eq!(
+        pos,
+        Pos {
+            x: 5,
+            y: 0,
+            dir: Dir::West
+        }
+    );
+
+    let pos = get_final_pos(
+        "   ...
+
+RR2",
+    );
+    assert_eq!(
+        pos,
+        Pos {
+            x: 4,
+            y: 0,
+            dir: Dir::West
+        }
+    );
+
+    let pos = get_final_pos(
+        "   ...
+
+RR3",
+    );
+    assert_eq!(
+        pos,
+        Pos {
+            x: 3,
+            y: 0,
+            dir: Dir::West
+        }
+    );
+}
+
 fn main() {
     let input = std::fs::read_to_string("input.txt").unwrap();
+    visualize(&input);
     println!("Part 1: {}", part_1(&input));
 }
