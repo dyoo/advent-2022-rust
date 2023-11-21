@@ -65,7 +65,7 @@ impl Problem {
                     new_y = y.checked_add_signed(-1).unwrap_or(self.map.len() - 1);
                 }
                 Dir::West => {
-                    new_x = x.checked_add_signed(-1).unwrap_or(self.map[0].len() - 1);
+                    new_x = x.checked_add_signed(-1).unwrap_or(self.map[y].len() - 1);
                 }
                 Dir::South => {
                     new_y = (y + 1) % self.map.len();
@@ -77,9 +77,11 @@ impl Problem {
 
             match self.map[new_y].get(new_x).unwrap_or(&' ') {
                 '#' => {
+                    // Hit a wall: stop moving
                     return Pos { x, y, dir };
                 }
                 '.' => {
+                    // Landed in vacant spot
                     return Pos {
                         x: new_x,
                         y: new_y,
@@ -87,6 +89,7 @@ impl Problem {
                     };
                 }
                 _ => {
+                    // Out of bounds.  Keep moving.
                     x = new_x;
                     y = new_y;
                 }
