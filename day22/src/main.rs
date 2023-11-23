@@ -57,21 +57,21 @@ impl Problem {
         None
     }
 
-    fn forward1(&self, Pos { mut x, mut y, dir }: Pos) -> Pos {
+    fn forward1(&self, Pos { x, y, dir }: Pos) -> Pos {
+        let (mut new_x, mut new_y) = (x, y);
         loop {
-            let (mut new_x, mut new_y) = (x, y);
             match dir {
                 Dir::North => {
-                    new_y = y.checked_add_signed(-1).unwrap_or(self.map.len() - 1);
+                    new_y = new_y.checked_add_signed(-1).unwrap_or(self.map.len() - 1);
                 }
                 Dir::West => {
-                    new_x = x.checked_add_signed(-1).unwrap_or(self.map[y].len() - 1);
+                    new_x = new_x.checked_add_signed(-1).unwrap_or(self.map[y].len() - 1);
                 }
                 Dir::South => {
-                    new_y = (y + 1) % self.map.len();
+                    new_y = (new_y + 1) % self.map.len();
                 }
                 Dir::East => {
-                    new_x = (x + 1) % self.map[y].len();
+                    new_x = (new_x + 1) % self.map[y].len();
                 }
             }
 
@@ -90,8 +90,6 @@ impl Problem {
                 }
                 _ => {
                     // Out of bounds.  Keep moving.
-                    x = new_x;
-                    y = new_y;
                 }
             }
         }
@@ -203,21 +201,19 @@ fn visualize(s: &str) {
     let mut map = problem.map.clone();
 
     for Pos { x, y, dir } in all_pos {
-        println!();
-        println!();
-        for line in &map {
-            for char in line {
-                print!("{}", char);
-            }
-            println!();
-        }
-
+	println!("({}, {})", x, y);
         map[y][x] = match dir {
             Dir::North => '^',
             Dir::East => '>',
             Dir::South => 'V',
             Dir::West => '<',
         }
+    }
+    for line in &map {
+        for char in line {
+            print!("{}", char);
+        }
+        println!();
     }
 }
 
