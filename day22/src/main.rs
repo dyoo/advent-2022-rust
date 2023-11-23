@@ -168,7 +168,6 @@ fn part_1(s: &str) -> i32 {
 /** Given the problem, returns final position. */
 fn get_final_pos(s: &str) -> Pos {
     let problem = parse_input(s).unwrap();
-    println!("{:?}", problem);
     let mut pos = problem.initial_pos().unwrap();
     for &a in &problem.moves {
         pos = problem.apply_move(pos, a);
@@ -176,7 +175,8 @@ fn get_final_pos(s: &str) -> Pos {
     pos
 }
 
-/** Given the problem, shows what the path looks like. */
+/** Given the problem, shows what the path looks like.  For debugging purposes. */
+#[allow(dead_code)]
 fn visualize(s: &str) {
     let problem = parse_input(s).unwrap();
     let mut pos = problem.initial_pos().unwrap();
@@ -201,7 +201,6 @@ fn visualize(s: &str) {
     let mut map = problem.map.clone();
 
     for Pos { x, y, dir } in all_pos {
-	println!("({}, {})", x, y);
         map[y][x] = match dir {
             Dir::North => '^',
             Dir::East => '>',
